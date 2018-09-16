@@ -70,7 +70,7 @@ struct Node {
 Node*
 var ()
 {
-    int negate = false;
+    bool negate = false;
     Node *n, *s;
 
     if (look() == '!') {
@@ -118,6 +118,7 @@ term ()
 Node*
 expr ()
 {
+    bool negate = false;
     Node *n, *c;
 
     /* 
@@ -126,14 +127,21 @@ expr ()
      */
     if (look() == '!' && look_n(1) == '(') {
         match('!');
-        n = new Node('!');
-        n->right = expr();
-    } else if (look() == '(') {
+        negate = true;
+    }
+
+    if (look() == '(') {
         match('(');
         n = expr();
         match(')');
     } else {
         n = term();
+    }
+
+    if (negate) {
+        c = new Node('!');
+        c->right = n;
+        n = c;
     }
 
     if (look() == '+') {
