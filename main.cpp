@@ -191,7 +191,7 @@ free_expr (Node *n)
     static int tab = 0;
 
     for (int i = 0; i < tab; i++)
-        printf(" ");
+        printf("   ");
     printf("%c\n", n->value);
     tab++;
 
