@@ -3,27 +3,38 @@
 #include <cstring>
 #include <ctype.h>
 #include <cerrno>
-
-/*
- * Var    -> [A-Za-z]
- * Term   -> VarTerm
- *         | Var
- * Clause -> Term
- *         | Term + Clause
- *         | (Clause)
- *         | !Clause
- * Expr   -> Clause
- *         | Clause + Expr
- *         | ClauseExpr
- */
+#include <vector>
 
 static FILE *INPUT_FILE = NULL;
 static int LOOKAHEAD;
 
+/*
+ * 1 character look ahead
+ */
 int
 look ()
 {
     return LOOKAHEAD;
+}
+
+/*
+ * Arbitrary character look ahead.
+ */
+int
+look_n (int count)
+{
+    std::vector<int> read;
+    /* read all character read including whitespace */
+    for (int i = 0; i < count; i++) {
+        do {
+            read.push_back(getc(INPUT_FILE));
+        } while (isspace(read.back()));
+    }
+    /* and put them back */
+    for (int i = (int) read.size() - 1; i >= 0; i--) {
+        ungetc(read[i], INPUT_FILE);
+    }
+    return read.back();
 }
 
 int
@@ -46,64 +57,112 @@ match (char c)
     next();
 }
 
-char
+struct Node {
+    Node *left;
+    Node *right;
+    char value;
+    Node (char val) : left(NULL), right(NULL), value(val) { }
+};
+
+/*
+ * Var -> !?[A-Za-z]
+ */
+Node*
 var ()
 {
-    int var = look();
-    if (!isalpha(var)) {
+    int negate = false;
+    Node *n, *s;
+
+    if (look() == '!') {
+        match('!');
+        negate = true;
+    }
+
+    if (!isalpha(look())) {
         fprintf(stderr, "Expected character instead got '%c'\n", look());
         exit(1);
     }
-    match(var);
-    return var;
+    n = new Node(look());
+    match(look());
+
+    if (negate) {
+        s = new Node('!');
+        s->right = n;
+        n = s;
+    }
+
+    return n;
 }
 
 /*
- * Term -> Var
- *       | VarTerm
+ * Term -> VarTerm | Var
  */
-void
+Node*
 term ()
 {
-    var();
-    if (isalpha(look()))
-        term();
+    Node *s, *n = var();
+
+    if (isalpha(look())) {
+        s = new Node('*');
+        s->left = n;
+        s->right = term();
+        n = s;
+    }
+
+    return n;
 }
 
 /*
- * Expr -> !Expr
- *       | (Expr)
- *       | Expr + Expr
- *       | Term + Expr
- *       | TermExpr
- *       | Term
+ * Expr -> !Expr | (Expr) | Expr + Expr | ExprExpr | Term
  */
-void
+Node*
 expr ()
 {
-    if (look() == '!') {
+    Node *n, *c;
+
+    /* 
+     * An expression can only be negated if it is wrapped in parentheses.
+     * Otherwise, it means we are negating a single term, e.g. !(ab) vs. !ab
+     */
+    if (look() == '!' && look_n(1) == '(') {
         match('!');
-        expr();
+        n = new Node('!');
+        n->right = expr();
     } else if (look() == '(') {
         match('(');
-        expr();
+        n = expr();
         match(')');
     } else {
-        term();
+        n = term();
     }
 
     if (look() == '+') {
         match('+');
-        expr();
-    } else if (look() == '(' || look() == '!' || isalpha(look())) {
-        /* the characters are the start of another expr */
-        expr();
+        c = new Node('+');
+        c->left = n;
+        c->right = expr();
+        n = c;
     }
+    /* these characters are the start of another expression */
+    else if (look() == '(' || look() == '!' || isalpha(look())) {
+        c = new Node('*');
+        c->left = n;
+        c->right = expr();
+        n = c;
+    }
+    /* if this isn't the end of an expression or end of input, error */
+    else if (!(look() == ')' || look() == EOF)) {
+        fprintf(stderr, "Unexpected '%c'\n", look());
+        exit(1);
+    }
+
+    return n;
 }
 
-void
+Node*
 parse_file (const char *inputfile)
 {
+    Node *n;
     INPUT_FILE = fopen(inputfile, "r");
     if (!INPUT_FILE) {
         perror(strerror(errno));
@@ -112,14 +171,37 @@ parse_file (const char *inputfile)
     /* set look to whitespace because 'next' loops until no whitespace */
     LOOKAHEAD = ' ';
     next();
-    expr();
+    n = expr();
+    printf("\n");
     fclose(INPUT_FILE);
+    return n;
+}
+
+void
+free_expr (Node *n)
+{
+    static int tab = 0;
+
+    for (int i = 0; i < tab; i++)
+        printf(" ");
+    printf("%c\n", n->value);
+    tab++;
+
+    if (n->left) {
+        free_expr(n->left);
+        tab--;
+    }
+    if (n->right) {
+        free_expr(n->right);
+        tab--;
+    }
+    delete n;
 }
 
 int
 main (int argc, char **argv)
 {
-    parse_file("input.txt");
-    printf("\n");
+    Node *expression = parse_file("input.txt");
+    free_expr(expression);
     return 0;
 }
