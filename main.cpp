@@ -59,7 +59,8 @@ var ()
 }
 
 /*
- * Term -> VarTerm | Var
+ * Term -> Var
+ *       | VarTerm
  */
 void
 term ()
@@ -70,43 +71,33 @@ term ()
 }
 
 /*
- * Clause -> (Clause) | !Clause | Term + Clause | Term
- */
-void
-clause ()
-{
-    if (look() == '(') {
-        match('(');
-        clause();
-        match(')');
-    }
-    else if (look() == '!') {
-        match('!');
-        clause();
-    } else {
-        term();
-        if (look() == '+') {
-            match('+');
-            clause();
-        }
-    }
-}
-
-/* 
- * Expr -> Clause | Clause + Expr | ClauseExpr
+ * Expr -> !Expr
+ *       | (Expr)
+ *       | Expr + Expr
+ *       | Term + Expr
+ *       | TermExpr
+ *       | Term
  */
 void
 expr ()
 {
-    clause();
+    if (look() == '!') {
+        match('!');
+        expr();
+    } else if (look() == '(') {
+        match('(');
+        expr();
+        match(')');
+    } else {
+        term();
+    }
+
     if (look() == '+') {
         match('+');
         expr();
-    } else if (look() != EOF) {
+    } else if (look() == '(' || look() == '!' || isalpha(look())) {
+        /* the characters are the start of another expr */
         expr();
-    }
-    else {
-        printf("\n");
     }
 }
 
@@ -129,5 +120,6 @@ int
 main (int argc, char **argv)
 {
     parse_file("input.txt");
+    printf("\n");
     return 0;
 }
