@@ -102,7 +102,7 @@ term ()
 {
     Node *s, *n = var();
 
-    if (isalpha(look())) {
+    if (isalpha(look()) || look() == '!') {
         s = new Node('*');
         s->left = n;
         s->right = term();
