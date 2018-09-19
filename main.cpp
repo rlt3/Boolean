@@ -206,10 +206,43 @@ free_expr (Node *n)
     delete n;
 }
 
+/*
+ * The first step: distribute all terms of any subexpressions so that only the
+ * operators only have single terms as operands, e.g.:
+ *      !a(ab + c) -> !aa * ab + !ac
+ *      (ab)(cd) -> ac * ad * bc * bd
+ */
+Node*
+distribute (Node *n)
+{
+    return n;
+}
+
+/*
+ * Apply reduction rules such as !aa = 0, !a + a = 1, a0 = 0, etc.
+ */
+Node*
+reduce (Node *n)
+{
+    return n;
+}
+
+/*
+ * The reverse of `distribute': factor out all redundant terms.
+ */
+Node*
+factor (Node *n)
+{
+    return n;
+}
+
 int
 main (int argc, char **argv)
 {
     Node *expression = parse_file("input.txt");
+    expression = distribute(expression);
+    expression = reduce(expression);
+    expression = factor(expression);
     free_expr(expression);
     return 0;
 }
