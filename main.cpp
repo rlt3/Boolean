@@ -4,6 +4,8 @@
 #include <ctype.h>
 #include <cerrno>
 #include <vector>
+#include <string>
+#include <set>
 
 static FILE *INPUT_FILE = NULL;
 static int LOOKAHEAD;
@@ -206,15 +208,76 @@ free_expr (Node *n)
     delete n;
 }
 
+bool
+is_type (Node *n, const std::string types)
+{
+    if (!n)
+        return false;
+    for (const auto &c : types)
+        if (n->value == c)
+            return true;
+    return false;
+}
+
+void
+set_recurse (Node *n, std::set<char> &s)
+{
+    if (!n)
+        return;
+    set_recurse(n->left, s);
+    set_recurse(n->right, s);
+    if (isalnum(n->value))
+        s.insert(n->value);
+}
+
+std::set<char>
+get_set (Node *n)
+{
+    std::set<char> s;
+    set_recurse(n, s);
+    return s;
+}
+
+bool
+is_constant (Node *n)
+{
+    if (!n)
+        return true;
+    if (isalnum(n->value))
+        return true;
+    if (n->value == '!')
+        return is_constant(n->right);
+    return false;
+}
+
 /*
  * The first step: distribute all terms of any subexpressions so that only the
  * operators only have single terms as operands, e.g.:
- *      !a(ab + c) -> !aa * ab + !ac
  *      (ab)(cd) -> ac * ad * bc * bd
  */
 Node*
 distribute (Node *n)
 {
+    if (!n)
+        return n;
+
+    n->left  = distribute(n->left);
+    n->right = distribute(n->right);
+
+    /* if either side of the expression is constant, no need to distribute */
+    if (is_constant(n->left) || is_constant(n->right))
+        return n;
+
+    std::set<char> a = get_set(n->left);
+    std::set<char> b = get_set(n->right);
+
+    printf("Node '%c' %p:\n", n->value, (void*)n);
+    for (const auto &c : a)
+        printf("%c\n", c);
+    for (const auto &c : b)
+        printf("%c\n", c);
+    printf("\n");
+
     return n;
 }
 
@@ -239,10 +302,10 @@ factor (Node *n)
 int
 main (int argc, char **argv)
 {
-    Node *expression = parse_file("input.txt");
-    expression = distribute(expression);
-    expression = reduce(expression);
-    expression = factor(expression);
-    free_expr(expression);
-    return 0;
+   Node *expression = parse_file("input.txt");
+   expression = distribute(expression);
+   expression = reduce(expression);
+   expression = factor(expression);
+   free_expr(expression);
+   return 0;
 }
