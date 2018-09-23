@@ -188,9 +188,13 @@ parse_file (const char *inputfile)
 }
 
 void
-free_expr (Node *n)
+print_expr (Node *n)
 {
     static int tab = 0;
+
+    if (tab == 0) {
+        printf("%p:\n", (void*) n);
+    }
 
     for (int i = 0; i < tab; i++)
         printf("   ");
@@ -198,13 +202,26 @@ free_expr (Node *n)
     tab++;
 
     if (n->left) {
-        free_expr(n->left);
+        print_expr(n->left);
         tab--;
     }
     if (n->right) {
-        free_expr(n->right);
+        print_expr(n->right);
         tab--;
     }
+    if (tab == 1) {
+        tab = 0;
+        printf("-------------------------------\n");
+    }
+}
+
+void
+free_expr (Node *n)
+{
+    if (n->left)
+        free_expr(n->left);
+    if (n->right)
+        free_expr(n->right);
     delete n;
 }
 
@@ -250,35 +267,76 @@ is_constant (Node *n)
     return false;
 }
 
-/*
- * The first step: distribute all terms of any subexpressions so that only the
- * operators only have single terms as operands, e.g.:
- *      (ab)(cd) -> ac * ad * bc * bd
- */
 Node*
-distribute (Node *n)
+deep_copy (Node *n)
 {
     if (!n)
         return n;
 
-    n->left  = distribute(n->left);
-    n->right = distribute(n->right);
+    Node *C = new Node(n->value);
+    C->left = deep_copy(n->left);
+    C->right = deep_copy(n->right);
+    return C;
+}
 
-    /* if either side of the expression is constant, no need to distribute */
-    if (is_constant(n->left) || is_constant(n->right))
-        return n;
+/*
+ *      N                      R.op
+ *    /   \                  /   \
+ *   L     R       ->       N.op  N.op
+ *        / \              / \   / \
+ *      RL   RR           L  RL L  RR
+ *
+ * For each child of R, we make a new Node whose operation if the operation
+ * of L, and put that child of R on the right of that node and L on the
+ * left of that Node.
+ * The new head of the entire tree should have the operation of R.
+ */
+Node*
+distribute (Node *N)
+{
+    /* head, left, right */
+    Node *H, *L, *R;
 
-    std::set<char> a = get_set(n->left);
-    std::set<char> b = get_set(n->right);
+    print_expr(N);
 
-    printf("Node '%c' %p:\n", n->value, (void*)n);
-    for (const auto &c : a)
-        printf("%c\n", c);
-    for (const auto &c : b)
-        printf("%c\n", c);
-    printf("\n");
+    if (!N)
+        return N;
 
-    return n;
+    if (!(N->left || N->right))
+        return N;
+
+    if (is_constant(N->left) && is_constant(N->right))
+        return N;
+
+    /* 
+     * if the tree has a constant expr on the right, we flip left and right so
+     * the algorithm can handle that case.
+     */
+    if (is_constant(N->right)) {
+        L = N->right;
+        R = N->left;
+    } else {
+        R = N->right;
+        L = N->left;
+    }
+
+    H = new Node(R->value);
+
+    if (R->left) {
+        H->left = new Node(N->value);
+        H->left->left = deep_copy(L);
+        H->left->right = deep_copy(R->left);
+        H->left = distribute(H->left);
+    }
+
+    if (R->right) {
+        H->right = new Node(N->value);
+        H->right->left = deep_copy(L);
+        H->right->right = deep_copy(R->right);
+        H->right = distribute(H->right);
+    }
+
+    return H;
 }
 
 /*
@@ -302,10 +360,18 @@ factor (Node *n)
 int
 main (int argc, char **argv)
 {
-   Node *expression = parse_file("input.txt");
-   expression = distribute(expression);
-   expression = reduce(expression);
-   expression = factor(expression);
-   free_expr(expression);
+   Node *expr, *dist;
+   expr = parse_file("input.txt");
+   //Node *L = deep_copy(expr->left);
+   //Node *R = deep_copy(expr->right);
+   //free_expr(L);
+   //free_expr(R);
+   //free_expr(expr);
+   dist = distribute(expr);
+   print_expr(dist);
+   free_expr(expr);
+   free_expr(dist);
+   //expr = reduce(expression);
+   //expr = factor(expression);
    return 0;
 }
