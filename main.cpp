@@ -279,6 +279,16 @@ deep_copy (Node *n)
     return C;
 }
 
+Node*
+map (Node *N, Node*(*func)(Node*))
+{
+    if (!N)
+        return N;
+    N->left = map(N->left, func);
+    N->right = map(N->right, func);
+    return func(N);
+}
+
 /*
  *      N                      R.op
  *    /   \                  /   \
@@ -307,6 +317,8 @@ distribute (Node *N)
 
     if (is_constant(N->left) && is_constant(N->right))
         return N;
+
+    printf("L: %c, R: %c\n", N->left->value, N->right->value);
 
     /* 
      * if the tree has a constant expr on the right, we flip left and right so
@@ -367,10 +379,11 @@ main (int argc, char **argv)
    //free_expr(L);
    //free_expr(R);
    //free_expr(expr);
-   dist = distribute(expr);
+   dist = map(expr, distribute);
+   //dist = distribute(expr);
    print_expr(dist);
-   free_expr(expr);
-   free_expr(dist);
+   //free_expr(expr);
+   //free_expr(dist);
    //expr = reduce(expression);
    //expr = factor(expression);
    return 0;
