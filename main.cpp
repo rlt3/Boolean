@@ -218,6 +218,8 @@ print_expr (Node *n)
 void
 free_expr (Node *n)
 {
+    if (!n)
+        return;
     if (n->left)
         free_expr(n->left);
     if (n->right)
@@ -280,35 +282,35 @@ deep_copy (Node *n)
 }
 
 /*
- *      N                      R.op
+ *      op                     R
  *    /   \                  /   \
- *   L     R       ->       N.op  N.op
+ *   L     R       ->       op   op
  *        / \              / \   / \
  *      RL   RR           L  RL L  RR
  *
- * For each child of R, we make a new Node whose operation if the operation
- * of L, and put that child of R on the right of that node and L on the
- * left of that Node.
- * The new head of the entire tree should have the operation of R.
+ * R becomes the new root node. Since we are distributing over 'op' then that
+ * becomes the new children node. Then it is a simple recursion with L staying
+ * constant and R collectively being iterated down to a term.
  */
 Node *
-distribute_iter (char op, Node *L, Node *R)
+distribute_iter (char op, Node *L, Node *R, Node *parent)
 {
     Node *H, *tmp;
 
-    H = new Node(op);
-    H->left = L;
-    H->right = R;
-
-    if (isalnum(op))
+    /* 
+     * All iterations of distribute end up here at which point we copy the
+     * contents of L and R and make a new Node to hold them.
+     */
+    if (is_constant(L) && is_constant(R)) {
+        H = new Node(op);
+        H->left = deep_copy(L);
+        H->right = deep_copy(R);
         return H;
-
-    if (is_constant(L) && is_constant(R))
-        return H;
+    }
 
     /* 
-     * if the tree has a constant expr on the right, we flip left and right so
-     * the algorithm can handle that case.
+     * If the tree has a constant expression on the right, we flip left and
+     * right. The algorithm is setup so that it uses right's children.
      */
     if (is_constant(R)) {
         tmp = L;
@@ -316,21 +318,57 @@ distribute_iter (char op, Node *L, Node *R)
         R = tmp;
     }
 
-    H->value = R->value;
-    H->left  = distribute_iter(op, L, R->left);
-    H->right = distribute_iter(op, deep_copy(L), R->right);
+    H = new Node(R->value);
+    H->left  = distribute_iter(op, L, R->left, NULL);
+    H->right = distribute_iter(op, L, R->right, NULL);
     return H;
 }
 
+/*
+ * This particular function is setup as a DFS. When it reaches a node with at
+ * least one compound statement it can then distribute those terms. This 
+ * distribution is done with `distribute_iter` which is setup as a BFS and also
+ * allocates a new subtree for the distributed terms.
+ */
 Node *
 distribute (Node *N)
 {
+    bool distributed = false;
     Node *H, *L, *R;
+
     if (!N)
         return N;
+
+    /* Variables and Constants (e.g. a,b,0,1) cannot be distributed */
+    if (isalnum(N->value))
+        return N;
+
     L = distribute(N->left);
     R = distribute(N->right);
-    H = distribute_iter(N->value, L, R);
+
+    /* Compound statements of variables cannot be distributed, e.g a + b */
+    if (is_constant(L) && is_constant(R))
+        return N;
+
+    /* distribute when there's at least one compound statement */
+    H = distribute_iter(N->value, L, R, NULL);
+
+    /*
+     * Distribute creates new subtrees using the existing Node's children to do
+     * the distribution. That means as we recurse back up the call chain that
+     * some subtrees will have been allocated this way and must be freed
+     * because `distribute_iter` will simply allocate a new subtree.
+     */
+    if (N->left != L) {
+        distributed = true;
+        free_expr(L);
+    }
+    if (N->right != R) {
+        distributed = true;
+        free_expr(R);
+    }
+    if (distributed)
+        free_expr(N);
     return H;
 }
 
@@ -355,14 +393,12 @@ factor (Node *n)
 int
 main (int argc, char **argv)
 {
-   Node *expr, *dist;
+   Node *expr;
    expr = parse_file("input.txt");
    print_expr(expr);
-   dist = distribute(expr);
-   print_expr(dist);
-   //print_expr(expr);
+   expr = distribute(expr);
+   print_expr(expr);
    free_expr(expr);
-   free_expr(dist);
    //expr = reduce(expression);
    //expr = factor(expression);
    return 0;
