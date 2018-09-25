@@ -279,16 +279,6 @@ deep_copy (Node *n)
     return C;
 }
 
-Node*
-map (Node *N, Node*(*func)(Node*))
-{
-    if (!N)
-        return N;
-    N->left = map(N->left, func);
-    N->right = map(N->right, func);
-    return func(N);
-}
-
 /*
  *      N                      R.op
  *    /   \                  /   \
@@ -301,53 +291,46 @@ map (Node *N, Node*(*func)(Node*))
  * left of that Node.
  * The new head of the entire tree should have the operation of R.
  */
-Node*
-distribute (Node *N)
+Node *
+distribute_iter (char op, Node *L, Node *R)
 {
-    /* head, left, right */
-    Node *H, *L, *R;
+    Node *H, *tmp;
 
-    print_expr(N);
+    H = new Node(op);
+    H->left = L;
+    H->right = R;
 
-    if (!N)
-        return N;
+    if (isalnum(op))
+        return H;
 
-    if (!(N->left || N->right))
-        return N;
-
-    if (is_constant(N->left) && is_constant(N->right))
-        return N;
-
-    printf("L: %c, R: %c\n", N->left->value, N->right->value);
+    if (is_constant(L) && is_constant(R))
+        return H;
 
     /* 
      * if the tree has a constant expr on the right, we flip left and right so
      * the algorithm can handle that case.
      */
-    if (is_constant(N->right)) {
-        L = N->right;
-        R = N->left;
-    } else {
-        R = N->right;
-        L = N->left;
+    if (is_constant(R)) {
+        tmp = L;
+        L = R;
+        R = tmp;
     }
 
-    H = new Node(R->value);
+    H->value = R->value;
+    H->left  = distribute_iter(op, L, R->left);
+    H->right = distribute_iter(op, deep_copy(L), R->right);
+    return H;
+}
 
-    if (R->left) {
-        H->left = new Node(N->value);
-        H->left->left = deep_copy(L);
-        H->left->right = deep_copy(R->left);
-        H->left = distribute(H->left);
-    }
-
-    if (R->right) {
-        H->right = new Node(N->value);
-        H->right->left = deep_copy(L);
-        H->right->right = deep_copy(R->right);
-        H->right = distribute(H->right);
-    }
-
+Node *
+distribute (Node *N)
+{
+    Node *H, *L, *R;
+    if (!N)
+        return N;
+    L = distribute(N->left);
+    R = distribute(N->right);
+    H = distribute_iter(N->value, L, R);
     return H;
 }
 
@@ -374,16 +357,12 @@ main (int argc, char **argv)
 {
    Node *expr, *dist;
    expr = parse_file("input.txt");
-   //Node *L = deep_copy(expr->left);
-   //Node *R = deep_copy(expr->right);
-   //free_expr(L);
-   //free_expr(R);
-   //free_expr(expr);
-   dist = map(expr, distribute);
-   //dist = distribute(expr);
+   print_expr(expr);
+   dist = distribute(expr);
    print_expr(dist);
-   //free_expr(expr);
-   //free_expr(dist);
+   //print_expr(expr);
+   free_expr(expr);
+   free_expr(dist);
    //expr = reduce(expression);
    //expr = factor(expression);
    return 0;
