@@ -62,8 +62,26 @@ match (char c)
 struct Node {
     Node *left;
     Node *right;
+    Node *parent;
     char value;
-    Node (char val) : left(NULL), right(NULL), value(val) { }
+
+    Node (char val) 
+        : left(NULL), right(NULL), parent(NULL), value(val) 
+    { }
+
+    void
+    add_right (Node *n)
+    {
+        this->right = n;
+        n->parent = this;
+    }
+
+    void
+    add_left (Node *n)
+    {
+        this->left = n;
+        n->parent = this;
+    }
 };
 
 /*
@@ -89,7 +107,7 @@ var ()
 
     if (negate) {
         s = new Node('!');
-        s->right = n;
+        s->add_right(n);
         n = s;
     }
 
@@ -106,8 +124,8 @@ term ()
 
     if (isalpha(look()) || look() == '!') {
         s = new Node('*');
-        s->left = n;
-        s->right = term();
+        s->add_left(n);
+        s->add_right(term());
         n = s;
     }
 
@@ -142,22 +160,22 @@ expr ()
 
     if (negate) {
         c = new Node('!');
-        c->right = n;
+        c->add_right(n);
         n = c;
     }
 
     if (look() == '+') {
         match('+');
         c = new Node('+');
-        c->left = n;
-        c->right = expr();
+        c->add_left(n);
+        c->add_right(expr());
         n = c;
     }
     /* these characters are the start of another expression */
     else if (look() == '(' || look() == '!' || isalpha(look())) {
         c = new Node('*');
-        c->left = n;
-        c->right = expr();
+        c->add_left(n);
+        c->add_right(expr());
         n = c;
     }
     /* if this isn't the end of an expression or end of input, error */
@@ -220,10 +238,15 @@ free_expr (Node *n)
 {
     if (!n)
         return;
-    if (n->left)
-        free_expr(n->left);
-    if (n->right)
-        free_expr(n->right);
+    free_expr(n->left);
+    free_expr(n->right);
+    n->left = NULL;
+    n->right = NULL;
+    /* Clear the parent's pointer to `n' */
+    if (n->parent && n->parent->left == n)
+        n->parent->left = NULL;
+    if (n->parent && n->parent->right == n)
+        n->parent->right = NULL;
     delete n;
 }
 
@@ -303,8 +326,8 @@ distribute_iter (char op, Node *L, Node *R, Node *parent)
      */
     if (is_constant(L) && is_constant(R)) {
         H = new Node(op);
-        H->left = deep_copy(L);
-        H->right = deep_copy(R);
+        H->add_left(deep_copy(L));
+        H->add_right(deep_copy(R));
         return H;
     }
 
@@ -319,8 +342,8 @@ distribute_iter (char op, Node *L, Node *R, Node *parent)
     }
 
     H = new Node(R->value);
-    H->left  = distribute_iter(op, L, R->left, NULL);
-    H->right = distribute_iter(op, L, R->right, NULL);
+    H->add_left(distribute_iter(op, L, R->left, NULL));
+    H->add_right(distribute_iter(op, L, R->right, NULL));
     return H;
 }
 
@@ -333,7 +356,6 @@ distribute_iter (char op, Node *L, Node *R, Node *parent)
 Node *
 distribute (Node *N)
 {
-    bool distributed = false;
     Node *H, *L, *R;
 
     if (!N)
@@ -359,16 +381,11 @@ distribute (Node *N)
      * some subtrees will have been allocated this way and must be freed
      * because `distribute_iter` will simply allocate a new subtree.
      */
-    if (N->left != L) {
-        distributed = true;
+    if (N->left != L)
         free_expr(L);
-    }
-    if (N->right != R) {
-        distributed = true;
+    if (N->right != R)
         free_expr(R);
-    }
-    if (distributed)
-        free_expr(N);
+    free_expr(N);
     return H;
 }
 
