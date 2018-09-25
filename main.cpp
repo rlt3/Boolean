@@ -240,13 +240,6 @@ free_expr (Node *n)
         return;
     free_expr(n->left);
     free_expr(n->right);
-    n->left = NULL;
-    n->right = NULL;
-    /* Clear the parent's pointer to `n' */
-    if (n->parent && n->parent->left == n)
-        n->parent->left = NULL;
-    if (n->parent && n->parent->right == n)
-        n->parent->right = NULL;
     delete n;
 }
 
@@ -376,16 +369,25 @@ distribute (Node *N)
     H = distribute_iter(N->value, L, R, NULL);
 
     /*
-     * Distribute creates new subtrees using the existing Node's children to do
-     * the distribution. That means as we recurse back up the call chain that
-     * some subtrees will have been allocated this way and must be freed
-     * because `distribute_iter` will simply allocate a new subtree.
+     * `distribute_iter' creates new subtrees and thus must be freed if they
+     * were each then used for distributing expression.
      */
     if (N->left != L)
         free_expr(L);
     if (N->right != R)
         free_expr(R);
+
+    /* 
+     * If we make it this far, distribution had to occur then N's values will
+     * have been copied to the leaves of the distributed subtree. Detach `N'
+     * from the tree and free only the N subexpression.
+     */
+    if (N->parent && N->parent->left == N)
+        N->parent->left = NULL;
+    if (N->parent && N->parent->right == N)
+        N->parent->right = NULL;
     free_expr(N);
+
     return H;
 }
 
