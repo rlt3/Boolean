@@ -206,34 +206,6 @@ parse_file (const char *inputfile)
 }
 
 void
-print_expr (Node *n)
-{
-    static int tab = 0;
-
-    if (tab == 0) {
-        printf("%p:\n", (void*) n);
-    }
-
-    for (int i = 0; i < tab; i++)
-        printf("   ");
-    printf("%c\n", n->value);
-    tab++;
-
-    if (n->left) {
-        print_expr(n->left);
-        tab--;
-    }
-    if (n->right) {
-        print_expr(n->right);
-        tab--;
-    }
-    if (tab == 1) {
-        tab = 0;
-        printf("-------------------------------\n");
-    }
-}
-
-void
 free_expr (Node *n)
 {
     if (!n)
@@ -286,16 +258,85 @@ is_constant (Node *n)
 }
 
 Node*
-deep_copy (Node *n)
+deep_copy (Node *n, Node* parent)
 {
     if (!n)
         return n;
 
     Node *C = new Node(n->value);
-    C->left = deep_copy(n->left);
-    C->right = deep_copy(n->right);
+    C->parent = parent;
+    C->left = deep_copy(n->left, C);
+    C->right = deep_copy(n->right, C);
     return C;
 }
+
+void
+print_tree (Node *n)
+{
+    static int tab = 0;
+
+    if (tab == 0) {
+        printf("%p:\n", (void*) n);
+    }
+
+    for (int i = 0; i < tab; i++)
+        printf("   ");
+    printf("%c\n", n->value);
+    tab++;
+
+    if (n->left) {
+        print_tree(n->left);
+        tab--;
+    }
+    if (n->right) {
+        print_tree(n->right);
+        tab--;
+    }
+    if (tab == 1) {
+        tab = 0;
+        printf("-------------------------------\n");
+    }
+}
+
+void
+print_logical (Node *n)
+{
+    int is_expr = false;
+
+    if (!n)
+        return;
+
+    if (!is_constant(n))
+        is_expr = true;
+
+    if (!is_expr)
+        printf("%c", n->value);
+
+    if (is_expr)
+        printf("(");
+
+    if (n->left)
+        print_logical(n->left);
+
+    if (is_expr) {
+        if (n->value == '+')
+            printf(" || ");
+        else if (n->value == '*')
+            printf(" && ");
+        else
+            printf("!");
+    }
+
+    if (n->right)
+        print_logical(n->right);
+
+    if (is_expr)
+        printf(")");
+
+    if (!n->parent)
+        printf("\n");
+}
+
 
 /*
  *      op                     R
@@ -309,7 +350,7 @@ deep_copy (Node *n)
  * constant and R collectively being iterated down to a term.
  */
 Node *
-distribute_iter (char op, Node *L, Node *R, Node *parent)
+distribute_iter (char op, Node *L, Node *R)
 {
     Node *H, *tmp;
 
@@ -319,8 +360,8 @@ distribute_iter (char op, Node *L, Node *R, Node *parent)
      */
     if (is_constant(L) && is_constant(R)) {
         H = new Node(op);
-        H->add_left(deep_copy(L));
-        H->add_right(deep_copy(R));
+        H->add_left(deep_copy(L, H));
+        H->add_right(deep_copy(R, H));
         return H;
     }
 
@@ -335,8 +376,8 @@ distribute_iter (char op, Node *L, Node *R, Node *parent)
     }
 
     H = new Node(R->value);
-    H->add_left(distribute_iter(op, L, R->left, NULL));
-    H->add_right(distribute_iter(op, L, R->right, NULL));
+    H->add_left(distribute_iter(op, L, R->left));
+    H->add_right(distribute_iter(op, L, R->right));
     return H;
 }
 
@@ -366,7 +407,7 @@ distribute (Node *N)
         return N;
 
     /* distribute when there's at least one compound statement */
-    H = distribute_iter(N->value, L, R, NULL);
+    H = distribute_iter(N->value, L, R);
 
     /*
      * `distribute_iter' creates new subtrees and thus must be freed if they
@@ -414,9 +455,10 @@ main (int argc, char **argv)
 {
    Node *expr;
    expr = parse_file("input.txt");
-   print_expr(expr);
+   print_tree(expr);
    expr = distribute(expr);
-   print_expr(expr);
+   print_tree(expr);
+   print_logical(expr);
    free_expr(expr);
    //expr = reduce(expression);
    //expr = factor(expression);
