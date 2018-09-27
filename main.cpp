@@ -382,16 +382,13 @@ distribute_iter (char op, Node *L, Node *R)
 }
 
 /*
- * This particular function is setup as a DFS. When it reaches a node with at
- * least one compound statement it can then distribute those terms. This 
- * distribution is done with `distribute_iter` which is setup as a BFS and also
- * allocates a new subtree for the distributed terms.
+ * We use this function as a guard for `distribute_iter` which will always 
+ * allocate memory for the new tree. If no distribution occurs then no memory
+ * should be allocated or free'd.
  */
 Node *
 distribute (Node *N)
 {
-    Node *H, *L, *R;
-
     if (!N)
         return N;
 
@@ -399,37 +396,12 @@ distribute (Node *N)
     if (isalnum(N->value))
         return N;
 
-    L = distribute(N->left);
-    R = distribute(N->right);
-
     /* Compound statements of variables cannot be distributed, e.g a + b */
-    if (is_constant(L) && is_constant(R))
+    if (is_constant(N->left) && is_constant(N->right))
         return N;
 
     /* distribute when there's at least one compound statement */
-    H = distribute_iter(N->value, L, R);
-
-    /*
-     * `distribute_iter' creates new subtrees and thus must be freed if they
-     * were each then used for distributing expression.
-     */
-    if (N->left != L)
-        free_expr(L);
-    if (N->right != R)
-        free_expr(R);
-
-    /* 
-     * If we make it this far, distribution had to occur then N's values will
-     * have been copied to the leaves of the distributed subtree. Detach `N'
-     * from the tree and free only the N subexpression.
-     */
-    if (N->parent && N->parent->left == N)
-        N->parent->left = NULL;
-    if (N->parent && N->parent->right == N)
-        N->parent->right = NULL;
-    free_expr(N);
-
-    return H;
+    return distribute_iter(N->value, N->left, N->right);
 }
 
 /*
@@ -453,14 +425,35 @@ factor (Node *n)
 int
 main (int argc, char **argv)
 {
-   Node *expr;
-   expr = parse_file("input.txt");
-   print_tree(expr);
-   expr = distribute(expr);
-   print_tree(expr);
-   print_logical(expr);
-   free_expr(expr);
-   //expr = reduce(expression);
-   //expr = factor(expression);
-   return 0;
+    Node *expr, *simp;
+
+    //bool are_equal;
+    //while (1) {
+    //    simp = distribute(expr);
+    //    /* 
+    //     * No distribution happened if no memory was allocated, thus no need to
+    //     * free any expressions here.
+    //     */
+    //    if (simp == expr)
+    //       break;
+    //    simp = reduce(simp);
+    //    simp = factor(simp);
+    //    /* if `simp` factors back into `expr' then it's in most-simple terms */
+    //    are_equal = expr_equal(expr, simp);
+    //    /* `expr' must be free'd regardless if loop is done or not */
+    //    free_expr(expr);
+    //    expr = simp;
+    //    if (are_equal)
+    //        break;
+    //}
+
+    expr = parse_file("input.txt");
+    print_tree(expr);
+    simp = distribute(expr);
+    print_tree(simp);
+    print_logical(simp);
+    free_expr(expr);
+    free_expr(simp);
+
+    return 0;
 }
