@@ -206,68 +206,62 @@ parse_file (const char *inputfile)
 }
 
 void
-free_expr (Node *n)
+expr_free (Node *n)
 {
     if (!n)
         return;
-    free_expr(n->left);
-    free_expr(n->right);
+    expr_free(n->left);
+    expr_free(n->right);
     delete n;
 }
 
-bool
-is_type (Node *n, const std::string types)
-{
-    if (!n)
-        return false;
-    for (const auto &c : types)
-        if (n->value == c)
-            return true;
-    return false;
-}
-
-void
-set_recurse (Node *n, std::set<char> &s)
-{
-    if (!n)
-        return;
-    set_recurse(n->left, s);
-    set_recurse(n->right, s);
-    if (isalnum(n->value))
-        s.insert(n->value);
-}
-
-std::set<char>
-get_set (Node *n)
-{
-    std::set<char> s;
-    set_recurse(n, s);
-    return s;
-}
-
-bool
-is_constant (Node *n)
-{
-    if (!n)
-        return true;
-    if (isalnum(n->value))
-        return true;
-    if (n->value == '!')
-        return is_constant(n->right);
-    return false;
-}
-
+/*
+ * Deepy copy another expression, i.e. the entire tree.
+ */
 Node*
-deep_copy (Node *n, Node* parent)
+expr_copy (Node *n, Node* parent)
 {
     if (!n)
         return n;
 
     Node *C = new Node(n->value);
     C->parent = parent;
-    C->left = deep_copy(n->left, C);
-    C->right = deep_copy(n->right, C);
+    C->left = expr_copy(n->left, C);
+    C->right = expr_copy(n->right, C);
     return C;
+}
+
+/*
+ * Returns whether expression is a constant expression.
+ */
+bool
+expr_constant (Node *n)
+{
+    if (!n)
+        return true;
+    if (isalnum(n->value))
+        return true;
+    if (n->value == '!')
+        return expr_constant(n->right);
+    return false;
+}
+
+/*
+ * Compare two expressions for equality.
+ */
+bool
+expr_cmp (Node *A, Node *B)
+{
+    /* if both are null they're equal */
+    if (A == NULL && B == NULL)
+        return 1;
+    /* if one is null and the other isn't */
+    if ((A == NULL) ^ (B == NULL))
+        return 0;
+    if (A->value != B->value)
+        return 0;
+    /* if we're here they're equal but both branches need to be equal too */
+    return 1 && expr_cmp(A->left, B->left) && expr_cmp(A->right, B->right);
 }
 
 void
@@ -306,7 +300,7 @@ print_logical (Node *n)
     if (!n)
         return;
 
-    if (!is_constant(n))
+    if (!expr_constant(n))
         is_expr = true;
 
     if (!is_expr)
@@ -337,7 +331,6 @@ print_logical (Node *n)
         printf("\n");
 }
 
-
 /*
  *      op                     R
  *    /   \                  /   \
@@ -358,10 +351,10 @@ distribute_iter (char op, Node *L, Node *R)
      * All iterations of distribute end up here at which point we copy the
      * contents of L and R and make a new Node to hold them.
      */
-    if (is_constant(L) && is_constant(R)) {
+    if (expr_constant(L) && expr_constant(R)) {
         H = new Node(op);
-        H->add_left(deep_copy(L, H));
-        H->add_right(deep_copy(R, H));
+        H->add_left(expr_copy(L, H));
+        H->add_right(expr_copy(R, H));
         return H;
     }
 
@@ -369,7 +362,7 @@ distribute_iter (char op, Node *L, Node *R)
      * If the tree has a constant expression on the right, we flip left and
      * right. The algorithm is setup so that it uses right's children.
      */
-    if (is_constant(R)) {
+    if (expr_constant(R)) {
         tmp = L;
         L = R;
         R = tmp;
@@ -397,7 +390,7 @@ distribute (Node *N)
         return N;
 
     /* Compound statements of variables cannot be distributed, e.g a + b */
-    if (is_constant(N->left) && is_constant(N->right))
+    if (expr_constant(N->left) && expr_constant(N->right))
         return N;
 
     /* distribute when there's at least one compound statement */
@@ -414,12 +407,37 @@ reduce (Node *n)
 }
 
 /*
- * The reverse of `distribute': factor out all redundant terms.
+ * The inverse of `distribute': factor out all redundant terms.
  */
 Node*
-factor (Node *n)
+factor (Node *N)
 {
-    return n;
+    /*
+     * For a Node with two compound expressions, we can get if either side has
+     * two equal expressions. If it does, then we can remove that expression on
+     * each side, keeping at least one reference to that removed expr, and
+     * combine the two left-over terms on each side.
+     */
+
+    /* cannot factor a constant expression (including N == NULL) */
+    if (expr_constant(N))
+        return N;
+
+    N->left = factor(N->left);
+    N->right = factor(N->right);
+
+    /* reductions were applied, so we cannot factor two constant expressions */
+    if (expr_constant(N->left) && expr_constant(N->right))
+        return N;
+
+    /*
+    if (expr_equal(N->left->left, N->right->left))
+    else if (expr_equal(N->left->left, N->right->right))
+    else if (expr_equal(N->left->right, N->right->left))
+    else if (expr_equal(N->left->right, N->right->right))
+    */
+
+    return N;
 }
 
 int
@@ -439,21 +457,22 @@ main (int argc, char **argv)
     //    simp = reduce(simp);
     //    simp = factor(simp);
     //    /* if `simp` factors back into `expr' then it's in most-simple terms */
-    //    are_equal = expr_equal(expr, simp);
+    //    are_equal = expr_cmp(expr, simp);
     //    /* `expr' must be free'd regardless if loop is done or not */
-    //    free_expr(expr);
+    //    expr_free(expr);
     //    expr = simp;
     //    if (are_equal)
     //        break;
     //}
 
     expr = parse_file("input.txt");
+    simp = expr;
     print_tree(expr);
     simp = distribute(expr);
     print_tree(simp);
     print_logical(simp);
-    free_expr(expr);
-    free_expr(simp);
+    expr_free(expr);
+    expr_free(simp);
 
     return 0;
 }
