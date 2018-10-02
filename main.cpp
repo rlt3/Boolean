@@ -206,12 +206,12 @@ parse_file (const char *inputfile)
 }
 
 void
-expr_free (Node *n)
+expr_delete (Node *n)
 {
     if (!n)
         return;
-    expr_free(n->left);
-    expr_free(n->right);
+    expr_delete(n->left);
+    expr_delete(n->right);
     delete n;
 }
 
@@ -409,10 +409,11 @@ reduce (Node *n)
 /*
  * The inverse of `distribute': factor out all redundant terms.
  *
- * Since T is a common expr of both N->left, N->right, then we then create a 
- * new Node that will have T as a child. Its other child will be be N with its
- * left L and it's right R. This means that N->left and N->right can be safely
- * free'd.
+ * This recurses in a DFS way to find N without two constant children.
+ * From node N, we look at the left and right children L and R. The common
+ * term T in both L and R are named LT and RT respectively. The leftover or
+ * uncommon terms are LL and RR (because there's one in L and one in R).
+ * We then combine LL and RR onto N and make a new Node to hold LT and N.
  *
  *       N                 F
  *     /   \             /   \
@@ -420,31 +421,21 @@ reduce (Node *n)
  *   / \   / \               / \
  *  LL LT RT  RR            LL  RR
  *
- *  LT becomes T. RT is freed. N->R is freed. N->L is freed. N->R becomes RR.
- *  N->L becomes LL. F is created with LT as left node.
- *
  */
 Node*
 factor (Node *N)
 {
     /* 
-     * T is the common term, thus LT == RT. LL and RR are the expressions which
-     * will make up the right-side of the factor'd sub-tree.
+     * I use this macro because I hate redundancy. It simply assigns the common
+     * term and uncommon terms to the following variables.  Each variable in
+     * the macro holds 'left' or 'right' and is placed literally.
      */
     Node *F, *LT, *RT, *LL, *RR;
-
 #define set_nodes(lt,rt,ll,rr) \
     LT = N->left->lt;  \
     RT = N->right->rt; \
     LL = N->left->ll;  \
     RR = N->right->rr
-
-    /*
-     * For a Node with two compound expressions, we can get if either side has
-     * two equal expressions. If it does, then we can remove that expression on
-     * each side, keeping at least one reference to that removed expr, and
-     * combine the two left-over terms on each side.
-     */
 
     /* cannot factor a constant expression (including N == NULL) */
     if (expr_constant(N))
@@ -476,23 +467,18 @@ factor (Node *N)
     }
 
     /* we always use the left term, so we remove the extra right one */
-    expr_free(RT);
+    expr_delete(RT);
 
-    /*
-     * N->right / N->left can be returned from `factor`, thus allocated. Are we
-     * going to need to detach one these from a parent perhaps?
-     */
+    /* we only need a single Node to hold the two leftover terms LL and RR */
+    delete N->left;
+    delete N->right;
+    N->add_left(LL);
+    N->add_right(RR);
 
-    /* both left and right held LL, LT, RR, and RT so they are useless now. */
-    free(N->left);
-    free(N->right);
-
+    /* and we combine our common term with N */
     F = new Node('*');
     F->add_left(LT);
     F->add_right(N);
-
-    N->add_left(LL);
-    N->add_right(RR);
 
     return F;
 }
@@ -516,7 +502,7 @@ main (int argc, char **argv)
     //    /* if `simp` factors back into `expr' then it's in most-simple terms */
     //    are_equal = expr_cmp(expr, simp);
     //    /* `expr' must be free'd regardless if loop is done or not */
-    //    expr_free(expr);
+    //    expr_delete(expr);
     //    expr = simp;
     //    if (are_equal)
     //        break;
@@ -533,10 +519,9 @@ main (int argc, char **argv)
     simp = factor(simp);
     print_tree(simp);
     print_logical(simp);
-    //printf("%p vs %p\n", (void*)expr, (void*)simp);
 
-    expr_free(expr);
-    expr_free(simp);
+    expr_delete(expr);
+    expr_delete(simp);
 
     return 0;
 }
