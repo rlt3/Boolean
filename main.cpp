@@ -466,17 +466,19 @@ factor (Node *N)
         return N;
     }
 
+    /* F will have the value of distributed nodes L and R */
+    F = new Node(N->left->value);
+
     /* we always use the left term, so we remove the extra right one */
     expr_delete(RT);
 
-    /* we only need a single Node to hold the two leftover terms LL and RR */
+    /* delete the N's left and right so it can hold our uncommon LL and RR */
     delete N->left;
     delete N->right;
     N->add_left(LL);
     N->add_right(RR);
 
-    /* and we combine our common term with N */
-    F = new Node('*');
+    /* and we combine our common T with N */
     F->add_left(LT);
     F->add_right(N);
 
@@ -510,14 +512,15 @@ main (int argc, char **argv)
 
     expr = parse_file("input.txt");
     simp = expr;
-    print_tree(expr);
+    //print_tree(expr);
+    print_logical(expr);
 
     simp = distribute(expr);
-    print_tree(simp);
+    //print_tree(simp);
     print_logical(simp);
 
     simp = factor(simp);
-    print_tree(simp);
+    //print_tree(simp);
     print_logical(simp);
 
     expr_delete(expr);

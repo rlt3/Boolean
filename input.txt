@@ -1,1 +1,1 @@
-a(cd + ef)
+a(bc + ((de + ef)(gh + ij)))
