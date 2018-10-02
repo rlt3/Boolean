@@ -408,10 +408,37 @@ reduce (Node *n)
 
 /*
  * The inverse of `distribute': factor out all redundant terms.
+ *
+ * Since T is a common expr of both N->left, N->right, then we then create a 
+ * new Node that will have T as a child. Its other child will be be N with its
+ * left L and it's right R. This means that N->left and N->right can be safely
+ * free'd.
+ *
+ *       N                 F
+ *     /   \             /   \
+ *    L     R     ->    T     N
+ *   / \   / \               / \
+ *  LL LT RT  RR            LL  RR
+ *
+ *  LT becomes T. RT is freed. N->R is freed. N->L is freed. N->R becomes RR.
+ *  N->L becomes LL. F is created with LT as left node.
+ *
  */
 Node*
 factor (Node *N)
 {
+    /* 
+     * T is the common term, thus LT == RT. LL and RR are the expressions which
+     * will make up the right-side of the factor'd sub-tree.
+     */
+    Node *F, *LT, *RT, *LL, *RR;
+
+#define set_nodes(lt,rt,ll,rr) \
+    LT = N->left->lt;  \
+    RT = N->right->rt; \
+    LL = N->left->ll;  \
+    RR = N->right->rr
+
     /*
      * For a Node with two compound expressions, we can get if either side has
      * two equal expressions. If it does, then we can remove that expression on
@@ -431,13 +458,43 @@ factor (Node *N)
         return N;
 
     /*
-    if (expr_equal(N->left->left, N->right->left))
-    else if (expr_equal(N->left->left, N->right->right))
-    else if (expr_equal(N->left->right, N->right->left))
-    else if (expr_equal(N->left->right, N->right->right))
-    */
+     * This compares each node of N->left and N->right to see if any
+     * expressions are the same and if they are and sets the appropriate
+     * expressions to LT, RT, etc. If there are no expressions that are the
+     * same, there can be no factoring.
+     */
+    if (expr_cmp(N->left->left, N->right->left)) {
+        set_nodes(left, left, right, right);
+    } else if (expr_cmp(N->left->left, N->right->right)) {
+        set_nodes(left, right, right, left);
+    } else if (expr_cmp(N->left->right, N->right->left)) {
+        set_nodes(right, left, left, right);
+    } else if (expr_cmp(N->left->right, N->right->right)) {
+        set_nodes(right, right, left, left);
+    } else {
+        return N;
+    }
 
-    return N;
+    /* we always use the left term, so we remove the extra right one */
+    expr_free(RT);
+
+    /*
+     * N->right / N->left can be returned from `factor`, thus allocated. Are we
+     * going to need to detach one these from a parent perhaps?
+     */
+
+    /* both left and right held LL, LT, RR, and RT so they are useless now. */
+    free(N->left);
+    free(N->right);
+
+    F = new Node('*');
+    F->add_left(LT);
+    F->add_right(N);
+
+    N->add_left(LL);
+    N->add_right(RR);
+
+    return F;
 }
 
 int
@@ -468,9 +525,16 @@ main (int argc, char **argv)
     expr = parse_file("input.txt");
     simp = expr;
     print_tree(expr);
+
     simp = distribute(expr);
     print_tree(simp);
     print_logical(simp);
+
+    simp = factor(simp);
+    print_tree(simp);
+    print_logical(simp);
+    //printf("%p vs %p\n", (void*)expr, (void*)simp);
+
     expr_free(expr);
     expr_free(simp);
 
