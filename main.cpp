@@ -98,7 +98,7 @@ var ()
         negate = true;
     }
 
-    if (!isalpha(look())) {
+    if (!isalnum(look())) {
         fprintf(stderr, "Expected character instead got '%c'\n", look());
         exit(1);
     }
@@ -420,27 +420,40 @@ distribute_iter (char op, Node *L, Node *R)
     return H;
 }
 
-/*
- * We use this function as a guard for `distribute_iter` which will always 
- * allocate memory for the new tree. If no distribution occurs then no memory
- * should be allocated or free'd.
- */
 Node *
 distribute (Node *N)
 {
-    if (!N)
-        return N;
-
-    /* Variables and Constants (e.g. a,b,0,1) cannot be distributed */
-    if (isalnum(N->value))
-        return N;
-
-    /* Compound statements of variables cannot be distributed, e.g a + b */
-    if (expr_constant(N->left) && expr_constant(N->right))
-        return N;
-
-    /* distribute when there's at least one compound statement */
     return distribute_iter(N->value, N->left, N->right);
+}
+
+/*
+ * If reducing to some value, let N be just that value.
+ */
+Node *
+reduce_to (Node *N, const char val)
+{
+    N->value = val;
+    expr_delete(N->left);
+    expr_delete(N->right);
+    N->right = NULL;
+    N->left = NULL;
+    return N;
+}
+
+/*
+ * If reducing to another node V, remove N's presence totally.
+ */
+Node *
+reduce_to (Node *N, Node *V)
+{
+    /* delete the other node we're not using */
+    if (N->left != V)
+        expr_delete(N->left);
+    if (N->right != V)
+        expr_delete(N->right);
+    V->parent = NULL;
+    delete N;
+    return V;
 }
 
 /*
@@ -453,65 +466,62 @@ distribute (Node *N)
 Node*
 reduce (Node *N)
 {
-#define reduce_to(val)     \
-{                          \
-    N->value = (val);      \
-    expr_delete(N->left);  \
-    expr_delete(N->right); \
-    N->right = NULL;       \
-    N->left = NULL;        \
-    return N;              \
-}
+    Node *L, *R;
 
     if (!N)
         return N;
 
-    N->left = reduce(N->left);
-    N->right = reduce(N->right);
+    if (!(N->left && N->right))
+        return N;
+
+    N->add_left(reduce(N->left));
+    N->add_right(reduce(N->right));
+    L = N->left;
+    R = N->right;
 
     /* if both expressions are not constant */
-    if (!(expr_constant(N->left) || expr_constant(N->right)))
+    if (!(expr_constant(L) || expr_constant(R)))
         return N;
 
     /* !aa = 0 */
-    if (N->value == '*' && N->left->value == '!' && N->left->right->value == N->right->value)
-        reduce_to('0');
+    if (N->value == '*' && L->value == '!' && L->right->value == R->value)
+        return reduce_to(N, '0');
 
     /* a!a = 0 */
-    if (N->value == '*' && N->right->value == '!' && N->right->right->value == N->left->value)
-        reduce_to('0');
+    if (N->value == '*' && R->value == '!' && R->right->value == L->value)
+        return reduce_to(N, '0');
     
     /* a0 = 0 || 0a = 0 */
-    if (N->value == '*' && (N->left->value == '0' || N->right->value == '0'))
-        reduce_to('0');
+    if (N->value == '*' && (L->value == '0' || R->value == '0'))
+        return reduce_to(N, '0');
 
     /* 1a = a */
-    if (N->value == '*' && N->left->value == '1')
-        reduce_to(N->right->value);
+    if (N->value == '*' && L->value == '1')
+        return reduce_to(N, R);
 
     /* a1 = a */
-    if (N->value == '*' && N->right->value == '1')
-        reduce_to(N->left->value);
+    if (N->value == '*' && R->value == '1')
+        return reduce_to(N, L);
 
     /* aa = 1 */
-    if (N->value == '*' && expr_cmp(N->left, N->right))
-        reduce_to('1');
+    if (N->value == '*' && expr_cmp(L, R))
+        return reduce_to(N, '1');
 
     /* a+a = a */
-    if (N->value == '+' && expr_cmp(N->left, N->right))
-        reduce_to(N->left->value);
+    if (N->value == '+' && expr_cmp(L, R))
+        return reduce_to(N, L);
 
     /* 0+a = a */
-    if (N->value == '+' && N->left->value == '0')
-        reduce_to(N->right->value);
+    if (N->value == '+' && L->value == '0')
+        return reduce_to(N, R);
 
     /* a+0 = a */
-    if (N->value == '+' && N->right->value == '0')
-        reduce_to(N->left->value);
+    if (N->value == '+' && R->value == '0')
+        return reduce_to(N, L);
 
     /* 1+a = 1 || a+1 = 1 */
-    if (N->value == '+' && (N->left->value == '1' || N->right->value == '1'))
-        reduce_to('1');
+    if (N->value == '+' && (L->value == '1' || R->value == '1'))
+        return reduce_to(N, '1');
 
     return N;
 }
@@ -553,6 +563,9 @@ factor (Node *N)
 
     N->left = factor(N->left);
     N->right = factor(N->right);
+
+    if (!(N->left || N->right))
+        return N;
 
     /* reductions were applied, so we cannot factor two constant expressions */
     if (expr_constant(N->left) && expr_constant(N->right))
@@ -599,48 +612,27 @@ int
 main (int argc, char **argv)
 {
     Node *expr, *simp;
-
-    //bool are_equal;
-    //while (1) {
-    //    simp = distribute(expr);
-    //    /* 
-    //     * No distribution happened if no memory was allocated, thus no need to
-    //     * free any expressions here.
-    //     */
-    //    if (simp == expr)
-    //       break;
-    //    simp = reduce(simp);
-    //    simp = factor(simp);
-    //    /* if `simp` factors back into `expr' then it's in most-simple terms */
-    //    are_equal = expr_cmp(expr, simp);
-    //    /* `expr' must be free'd regardless if loop is done or not */
-    //    expr_delete(expr);
-    //    expr = simp;
-    //    if (are_equal)
-    //        break;
-    //}
+    bool are_equal;
 
     expr = parse_file("input.txt");
     expr = de_morgans_laws(expr);
-    simp = expr;
-    //print_tree(expr);
+
+    while (1) {
+        simp = distribute(expr);
+        simp = reduce(simp);
+        simp = factor(simp);
+        /* if `simp` factors back into `expr' then it's in most-simple terms */
+        are_equal = expr_cmp(expr, simp);
+        /* `expr' must be free'd regardless if loop is done or not */
+        expr_delete(expr);
+        expr = simp;
+        if (are_equal)
+            break;
+    }
+
+    print_tree(expr);
     print_logical(expr);
-
-    simp = distribute(expr);
-    //print_tree(simp);
-    print_logical(simp);
-
-    simp = reduce(simp);
-    //print_tree(simp);
-    print_logical(simp);
-
-    simp = factor(simp);
-    //print_tree(simp);
-    print_logical(simp);
-
     expr_delete(expr);
-    if (expr != simp)
-        expr_delete(simp);
 
     return 0;
 }
