@@ -445,11 +445,75 @@ distribute (Node *N)
 
 /*
  * Apply reduction rules such as !aa = 0, !a + a = 1, a0 = 0, etc.
+ *
+ *       N
+ *     /   \    ->   N
+ *    L     R
  */
 Node*
-reduce (Node *n)
+reduce (Node *N)
 {
-    return n;
+#define reduce_to(val)     \
+{                          \
+    N->value = (val);      \
+    expr_delete(N->left);  \
+    expr_delete(N->right); \
+    N->right = NULL;       \
+    N->left = NULL;        \
+    return N;              \
+}
+
+    if (!N)
+        return N;
+
+    N->left = reduce(N->left);
+    N->right = reduce(N->right);
+
+    /* if both expressions are not constant */
+    if (!(expr_constant(N->left) || expr_constant(N->right)))
+        return N;
+
+    /* !aa = 0 */
+    if (N->value == '*' && N->left->value == '!' && N->left->right->value == N->right->value)
+        reduce_to('0');
+
+    /* a!a = 0 */
+    if (N->value == '*' && N->right->value == '!' && N->right->right->value == N->left->value)
+        reduce_to('0');
+    
+    /* a0 = 0 || 0a = 0 */
+    if (N->value == '*' && (N->left->value == '0' || N->right->value == '0'))
+        reduce_to('0');
+
+    /* 1a = a */
+    if (N->value == '*' && N->left->value == '1')
+        reduce_to(N->right->value);
+
+    /* a1 = a */
+    if (N->value == '*' && N->right->value == '1')
+        reduce_to(N->left->value);
+
+    /* aa = 1 */
+    if (N->value == '*' && expr_cmp(N->left, N->right))
+        reduce_to('1');
+
+    /* a+a = a */
+    if (N->value == '+' && expr_cmp(N->left, N->right))
+        reduce_to(N->left->value);
+
+    /* 0+a = a */
+    if (N->value == '+' && N->left->value == '0')
+        reduce_to(N->right->value);
+
+    /* a+0 = a */
+    if (N->value == '+' && N->right->value == '0')
+        reduce_to(N->left->value);
+
+    /* 1+a = 1 || a+1 = 1 */
+    if (N->value == '+' && (N->left->value == '1' || N->right->value == '1'))
+        reduce_to('1');
+
+    return N;
 }
 
 /*
@@ -563,6 +627,10 @@ main (int argc, char **argv)
     print_logical(expr);
 
     simp = distribute(expr);
+    //print_tree(simp);
+    print_logical(simp);
+
+    simp = reduce(simp);
     //print_tree(simp);
     print_logical(simp);
 
