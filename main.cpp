@@ -122,7 +122,7 @@ term ()
 {
     Node *s, *n = var();
 
-    if (isalpha(look()) || look() == '!') {
+    if (isalpha(look()) || (look() == '!' && look_n(1) != '(')) {
         s = new Node('*');
         s->add_left(n);
         s->add_right(term());
@@ -332,6 +332,52 @@ print_logical (Node *n)
 }
 
 /*
+ * Recurse downwards in a BFS manner. For some negated expression, the negation
+ * is distributed to the expression's leaves. The root negation is removed and
+ * the new root is either OR or AND for AND or OR respectively.
+ *
+ *    !             f(N)
+ *     \            / \
+ *      N     ->   !   !
+ *     / \          \   \
+ *    A   B          A   B
+ */
+Node *
+de_morgans_laws (Node *N)
+{
+    /*
+     * Useful tests: 
+     *      !(pq) => !p+!q
+     *      !(p+q) => !p!q
+     *      !!!p => !p
+     *      !!p => p
+     */
+
+    if (!N)
+        return N;
+
+    if (N->value == '!' && !expr_constant(N)) {
+        /* give root node the opposite operator of N (in ascii drawing) */
+        switch (N->right->value) {
+            case '*': N->value = '+'; break;
+            case '+': N->value = '*'; break;
+        }
+        /* N becomes negated and a new left node of root needs to be created */
+        N->right->value = '!';
+        N->add_left(new Node('!'));
+        /* Simply move A to the new left node */
+        N->left->add_right(N->right->left);
+        /* And remove A from right negation */
+        N->right->left = NULL;
+    }
+
+    N->left = de_morgans_laws(N->left);
+    N->right = de_morgans_laws(N->right);
+
+    return N;
+}
+
+/*
  *      op                     R
  *    /   \                  /   \
  *   L     R       ->       op   op
@@ -511,6 +557,7 @@ main (int argc, char **argv)
     //}
 
     expr = parse_file("input.txt");
+    expr = de_morgans_laws(expr);
     simp = expr;
     //print_tree(expr);
     print_logical(expr);
@@ -524,7 +571,8 @@ main (int argc, char **argv)
     print_logical(simp);
 
     expr_delete(expr);
-    expr_delete(simp);
+    if (expr != simp)
+        expr_delete(simp);
 
     return 0;
 }
