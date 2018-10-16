@@ -114,7 +114,40 @@ struct Node {
 };
 
 /*
- * Var -> !?[A-Za-z]
+ * Combine like expressions as much as possible. For example, (ab)cd could
+ * simply be abcd.
+ */
+Node
+absorb (Node parent)
+{
+    std::set<Node> C;
+
+    if (parent.children.empty())
+        return parent;
+
+    /* hold all the flattened children's nodes */
+    for (auto child : parent.children)
+        C.insert(absorb(child));
+
+    /* 
+     * for all those flattened children, if any match the parent's value, it
+     * can be absorbed by the parent. Otherwise, it is added as another child.
+     */
+    parent.children.clear();
+    for (auto child : C) {
+        if (child.value == parent.value) {
+            for (auto c : child.children)
+                parent.children.insert(c);
+        } else {
+            parent.children.insert(child);
+        }
+    }
+
+    return parent;
+}
+
+/*
+ * var -> !?[A-Za-z01]
  */
 Node
 var ()
@@ -144,7 +177,7 @@ var ()
 }
 
 /*
- * Term -> VarTerm | Var
+ * term -> <var><term> | <var>
  */
 Node
 term ()
@@ -162,7 +195,20 @@ term ()
 }
 
 /*
- * Expr -> !Expr | (Expr) | Expr + Expr | ExprExpr | Term
+ * <value> -> !?[A-Za-z01]
+ * <term>  -> !?(<term>) | <value> | <value>+<term> | <value><term>
+ * <expr>  -> !?(<expr>) | <term> | <term>+<expr> | <term><expr>
+ *
+ * I think the extra layer of <term> helps automatically group expressions in
+ * a humanly logical format. For example, in the expression: 'a(b) + c + d' I
+ * would expect the 'a(b)' to be reduced to 'ab' first and then or'd with the
+ * other expressions. Instead what happens is that a is and'd with the or of
+ * a, b, c which seems incorrect. The absorption on the final <term> should
+ * force 'a(b)' to be 'ab' before doing the or later.
+ */
+
+/*
+ * expr  -> !?(<expr>) | <term> | <term><expr> | <term>+<expr>
  */
 Node
 expr ()
@@ -183,14 +229,13 @@ expr ()
         match('(');
         n = expr();
         match(')');
+        if (negate) {
+            c = Node('!');
+            c.add_child(n);
+            n = c;
+        }
     } else {
         n = term();
-    }
-
-    if (negate) {
-        c = Node('!');
-        c.add_child(n);
-        n = c;
     }
 
     if (look() == '+') {
@@ -201,7 +246,7 @@ expr ()
         n = c;
     }
     /* these characters are the start of another expression */
-    else if (look() == '(' || look() == '!' || isalpha(look())) {
+    else if (look() == '(' || look() == '!' || isalnum(look())) {
         c = Node('*');
         c.add_child(n);
         c.add_child(expr());
@@ -213,7 +258,7 @@ expr ()
         exit(1);
     }
 
-    return n;
+    return absorb(n);
 }
 
 Node
