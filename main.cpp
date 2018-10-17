@@ -71,6 +71,20 @@ struct Node {
         : value(val)
     { }
 
+    bool
+    is_constant () const
+    {
+        /* if the Node is alpha numeric, it is constant */
+        if (isalnum(this->value))
+            return true;
+
+        /* if it is a negation, check if the child is constant, e.g. !a */
+        if (this->value == '!')
+            return (*this->children.begin()).is_constant();
+
+        return false;
+    }
+
     void
     add_child (Node n)
     {
@@ -300,10 +314,102 @@ print_tree (Node &n)
     }
 }
 
+/*
+ * Recursively negate all terms in the expression tree.
+ */
+Node
+apply_negation (Node N)
+{
+    return N;
+}
+
+/*
+ * Distribute all atomic children to the compound children. Non-recursive, so
+ * it only distributes the given Node's children once.
+ */
+Node
+distribute (Node N)
+{
+    /* 
+     * Distributing from the left to the right. The left (L) will contain only
+     * atomic nodes that will be distributed to all compound right (R)
+     * children.
+     */
+    std::set<Node> L;
+    std::set<Node> R;
+    char compound_type;
+
+    if (N.is_constant())
+        return N;
+
+    /*
+     * Because of absorption, all compound statements will be the 'opposite' of
+     * the current root's value.
+     */
+    switch (N.value) {
+        case '*': compound_type = '+'; break;
+        case '+': compound_type = '*'; break;
+        /* can never be '!' because we negate entire tree before distributing */
+    }
+
+    /* gather atomic and compound children into L and R respectively */
+    for (auto c : N.children) {
+        /*
+         * If value is anything other than the compound type, it is an atomic
+         * Node. Even if value is '!', negation occurs until there are no more
+         * compound Nodes, so it will be an atomic negation, "!a".
+         */
+        if (c.value != compound_type)
+            L.insert(c);
+        else
+            R.insert(c);
+    }
+
+    /* if all children are constant, we do not need to distribute */
+    if (L.size() == N.children.size())
+        return N;
+
+    /*
+     * Distribute the terms LOL
+     */
+
+    return N;
+}
+
+/*
+ * Recursively reduce all reducable terms in the expression tree.
+ */
+Node
+reduce (Node N)
+{
+    return N;
+}
+
+/*
+ * Recursively factor out all redundant terms in the expression tree.
+ */
+Node
+factor (Node N)
+{
+    return N;
+}
+
 int
 main (int argc, char **argv)
 {
-    Node expr = parse_file("input.txt");
+    Node simp;
+    Node expr;
+    
+    expr = apply_negation(parse_file("input.txt"));
     print_tree(expr);
+
+    //while (1) {
+    //    simp = distribute(expr);
+    //    simp = reduce(simp)
+    //    simp = factor(simp)
+    //    if (expr == simp)
+    //        break;
+    //}
+
     return 0;
 }
