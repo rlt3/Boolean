@@ -1,1 +1,1 @@
-ab(c+d)ef
+a(!a+b)(c+d)

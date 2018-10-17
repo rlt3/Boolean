@@ -362,9 +362,27 @@ distribute (Node N)
     if (L.size() == N.children.size())
         return N;
 
+    N.children.clear();
+
     /*
-     * Distribute the terms LOL
+     * For each Node r in R create a new node q with r's value. Loop through
+     * r's children and create a new Node c with N's value where c's children
+     * are L and the current child of r. c is then added as a child of q.
      */
+    for (auto r : R) {
+        Node q(r.value);
+        for (auto rc : r.children) {
+            Node child(N.value);
+            child.children = L;
+            child.children.insert(rc);
+            q.children.insert(child);
+        }
+        N.children.insert(q);
+    }
+
+    /* If the is only one child in N, that child becomes the new root. */
+    if (N.children.size() == 1)
+        N = (*N.children.begin());
 
     return N;
 }
@@ -395,6 +413,9 @@ main (int argc, char **argv)
     
     expr = apply_negation(parse_file("input.txt"));
     print_tree(expr);
+
+    simp = distribute(expr);
+    print_tree(simp);
 
     //while (1) {
     //    simp = distribute(expr);
