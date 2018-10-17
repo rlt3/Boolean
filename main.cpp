@@ -71,20 +71,6 @@ struct Node {
         : value(val)
     { }
 
-    bool
-    is_constant () const
-    {
-        /* if the Node is alpha numeric, it is constant */
-        if (isalnum(this->value))
-            return true;
-
-        /* if it is a negation, check if the child is constant, e.g. !a */
-        if (this->value == '!')
-            return (*this->children.begin()).is_constant();
-
-        return false;
-    }
-
     void
     add_child (Node n)
     {
@@ -339,7 +325,16 @@ distribute (Node N)
     std::set<Node> R;
     char compound_type;
 
-    if (N.is_constant())
+    /* if the Node is outright atomic, we cannot distribute */
+    if (isalnum(N.value))
+        return N;
+
+    /* 
+     * N can never be a negated compound expression because `apply_negation`
+     * applies any negations recursively until there are only negated atomic
+     * values, e.g. !(a+b) => !a!b
+     */
+    if (N.value == '!')
         return N;
 
     /*
@@ -349,15 +344,13 @@ distribute (Node N)
     switch (N.value) {
         case '*': compound_type = '+'; break;
         case '+': compound_type = '*'; break;
-        /* can never be '!' because we negate entire tree before distributing */
     }
 
     /* gather atomic and compound children into L and R respectively */
     for (auto c : N.children) {
-        /*
-         * If value is anything other than the compound type, it is an atomic
-         * Node. Even if value is '!', negation occurs until there are no more
-         * compound Nodes, so it will be an atomic negation, "!a".
+        /* 
+         * If value is not the compound type, it is an atomic Node. 
+         * Negated nodes ('!') will always be atomic, see above.
          */
         if (c.value != compound_type)
             L.insert(c);
