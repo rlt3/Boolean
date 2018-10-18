@@ -382,7 +382,7 @@ distribute (Node N)
 
     /* If the is only one child in N, that child becomes the new root. */
     if (N.children.size() == 1)
-        N = (*N.children.begin());
+        return *N.children.begin();
 
     return N;
 }
@@ -454,28 +454,41 @@ factor (Node N)
             R.insert(fc);
     }
 
-    Node f(N.value);
+    char compound_type;
     switch (N.value) {
-        case '+': N.value = '*'; break;
-        case '*': N.value = '+'; break;
+        case '+': 
+            compound_type = '+';
+            N.value = '*';
+            break;
+        case '*':
+            compound_type = '*';
+            N.value = '+';
+            break;
     }
 
     /* 
-     * remove the subset R from the children of each Node in C before appending
-     * it to the factor'd node.
+     * R now contains the redundant terms in the children of C. So, for each
+     * Node in C, we erase from its children each redundant term and then add
+     * those terms to the factored node.
+     * 
      */
+    printf("BEFORE\n");
+    N.children = C;
+    print_tree(N);
+    N.children.clear();
+    F = Node(compound_type);
     for (auto c : C) {
         for (auto r : R)
             c.children.erase(r);
         for (auto b : c.children)
-            f.children.insert(b);
+            F.children.insert(b);
     }
-
-    N.children.clear();
-    N.children.insert(f);
     for (auto r : R)
         N.children.insert(r);
-
+    N.children.insert(F);
+    printf("AFTER\n");
+    print_tree(N);
+    printf("\n\n");
     return N;
 }
 
@@ -491,7 +504,7 @@ main (int argc, char **argv)
     simp = distribute(expr);
     print_tree(simp);
 
-    simp = factor(simp);
+    simp = factor(simp); printf("SIMP:\n");
     print_tree(simp);
 
     //while (1) {
