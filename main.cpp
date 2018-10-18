@@ -402,6 +402,80 @@ reduce (Node N)
 Node
 factor (Node N)
 {
+    bool all_atomic;
+    Node F;
+    std::set<Node> C;
+    std::set<Node> R;
+
+    all_atomic = true;
+
+    /* if there are no children, there is nothing to factor */
+    if (N.children.empty())
+        return N;
+
+    for (auto c : N.children) {
+        if (all_atomic && (c.value == '*' || c.value == '+'))
+            all_atomic = false;
+        C.insert(factor(c));
+    }
+    
+    /* if all the children are atomic we cannot factor anything out */
+    if (all_atomic)
+        return N;
+
+    /* 
+     * F is the first child in C. We use it as the guinea pig. If there are any
+     * values in all of the children in C, it will also be in F.
+     */
+    F = *C.begin();
+    /* for each child in F */
+    for (auto fc : F.children) {
+        bool in_all = true;
+
+        /* loop through each Node in C after the first */
+        for (auto it = std::next(C.begin()); it != C.end(); it++) {
+            bool in_child = false;
+            /* test if fc is in the children of that Node */
+            for (auto c : (*it).children)
+                if (c == fc)
+                    in_child = true;
+            /* 
+             * if fc isn't in one Node of C, it cannot be in all Nodes of C, so
+             * break and try a new fc
+             */
+            if (!in_child) {
+                in_all = false;
+                break;
+            }
+        }
+
+        /* if fc is found in all children of C, add it to the redundant set */
+        if (in_all)
+            R.insert(fc);
+    }
+
+    Node f(N.value);
+    switch (N.value) {
+        case '+': N.value = '*'; break;
+        case '*': N.value = '+'; break;
+    }
+
+    /* 
+     * remove the subset R from the children of each Node in C before appending
+     * it to the factor'd node.
+     */
+    for (auto c : C) {
+        for (auto r : R)
+            c.children.erase(r);
+        for (auto b : c.children)
+            f.children.insert(b);
+    }
+
+    N.children.clear();
+    N.children.insert(f);
+    for (auto r : R)
+        N.children.insert(r);
+
     return N;
 }
 
@@ -417,8 +491,13 @@ main (int argc, char **argv)
     simp = distribute(expr);
     print_tree(simp);
 
+    simp = factor(simp);
+    print_tree(simp);
+
     //while (1) {
     //    simp = distribute(expr);
+    //    if (expr == simp)
+    //        simp = factor(expr);
     //    simp = reduce(simp)
     //    simp = factor(simp)
     //    if (expr == simp)
