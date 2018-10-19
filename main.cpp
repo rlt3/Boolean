@@ -60,206 +60,162 @@ match (char c)
 }
 
 struct Node {
-    char value;
-    std::set<Node> children;
+    /*
+     * a set of character values.
+     * a vector of children.
+     * a type.
+     *
+     * constant expressions would have no children, e.g. a+b+c or abc.
+     * otherwise there are children, e.g. a+(bc)+d
+     * instead of having an actual node for values, it is simply a character
+     * which keeps values very, very simple and makes 'sets' 10x easier to use.
+     * that's the goal: use c++'s strengths and stop forcing shit with weird
+     * overloading of operators because we have a weird nested type as a set.
+     * YOU WILL SEE A DRAMATIC INCREASE IN PRODUCTIVITY THIS WAY
+     *
+     * <var>  = [A-Za-z01]
+     * <sub>  = (<expr>)
+     * <or>   = +<var><or> | +<sub> | E
+     * <and>  = <var><and> | <sub> | E
+     * <expr> = <sub><expr> | <var> | <var><or><expr> | <var><and><expr>
+     *
+     * In this grammar, every time <expr> is called it creates a new Node. That
+     * node exists and is used as long as there is a single compound type being
+     * used or a single variable is read, e.g. a+b+c is first read as a 
+     * <var><or><expr> where <or> is recursive and thus will simply 'fill' up
+     * that single expression node until it cannot. Any call to <expr> will add
+     * its return value as a child to the current node it has. This will remove
+     * any need for an absorption function immediately after parsing (and
+     * possibly in general).
+     *
+     */
+    char type;
+    std::set<char> values;
+    std::vector<Node> children;
 
     Node () 
-        : value(0)
+        /* this means 'constant type', i.e a Node with a singular variable */
+        : type('@')
     { }
 
-    Node (char val) 
-        : value(val)
+    Node (char type) 
+        : type(type)
     { }
-
-    void
-    add_child (Node n)
-    {
-        children.insert(n);
-    }
-
-    bool
-    operator== (const Node &other) const
-    {
-        return (this->value == other.value && this->children == other.children);
-    }
-
-    bool
-    operator< (const Node &other) const
-    {
-        /* 
-         * std::set determines equality by comparing two elements such that:
-         * !(a < b) && !(b < a). Therefore, false will be returned for both
-         * statements to produce equality. Conversely, two true's will say that
-         * the two elements are NOT equal (and therefore put both in the set).
-         *
-         * If there are two operator values (*,+,!) and their children sets are
-         * not the same size, return true. The sizes are equal, set a 
-         * Node-by-Node comparison of the sets. Any mismatching elements will
-         * cause this to return true. Otherwise false.
-         *
-         * In the case for two variable symbols, simply compare them.
-         */
-
-        if ((value == '*' && value == other.value) || 
-            (value == '+' && value == other.value) ||
-            (value == '!' && value == other.value))
-        {
-            if (children.size() != other.children.size())
-                return true;
-            return !(children == other.children);
-        }
-
-        return (this->value < other.value);
-    }
 };
 
-/*
- * Combine like expressions as much as possible. For example, (ab)cd could
- * simply be abcd.
- */
-Node
-absorb (Node parent)
-{
-    std::set<Node> C;
-
-    if (parent.children.empty())
-        return parent;
-
-    /* hold all the flattened children's nodes */
-    for (auto child : parent.children)
-        C.insert(absorb(child));
-
-    /* 
-     * for all those flattened children, if any match the parent's value, it
-     * can be absorbed by the parent. Otherwise, it is added as another child.
-     */
-    parent.children.clear();
-    for (auto child : C) {
-        if (child.value == parent.value) {
-            for (auto c : child.children)
-                parent.children.insert(c);
-        } else {
-            parent.children.insert(child);
-        }
-    }
-
-    return parent;
-}
+char var ();
+void g_or (Node &);
+void g_and (Node &);
+Node expr ();
 
 /*
- * var -> !?[A-Za-z01]
+ * var -> [A-Za-z01]
  */
-Node
+char
 var ()
 {
-    bool negate = false;
-    Node n, s;
-
-    if (look() == '!') {
-        match('!');
-        negate = true;
-    }
-
-    if (!isalnum(look())) {
-        fprintf(stderr, "Expected character instead got '%c'\n", look());
+    char c = look();
+    if (!isalnum(c)) {
+        fprintf(stderr, "Expected character instead got '%c'\n", c);
         exit(1);
     }
-    n = Node(look());
-    match(look());
-
-    if (negate) {
-        s = Node('!');
-        s.add_child(n);
-        return s;
-    }
-
-    return n;
+    match(c);
+    return c;
 }
 
 /*
- * term -> <var><term> | <var>
+ * <sub> = (<expr>)
  */
 Node
-term ()
+sub ()
 {
-    Node s, n = var();
-
-    if (isalpha(look()) || (look() == '!' && look_n(1) != '(')) {
-        s = Node('*');
-        s.add_child(n);
-        s.add_child(term());
-        return s;
-    }
-
-    return n;
+    match('(');
+    Node N = expr();
+    match(')');
+    return N;
 }
 
-/*
- * <value> -> !?[A-Za-z01]
- * <term>  -> !?(<term>) | <value> | <value>+<term> | <value><term>
- * <expr>  -> !?(<expr>) | <term> | <term>+<expr> | <term><expr>
- *
- * I think the extra layer of <term> helps automatically group expressions in
- * a humanly logical format. For example, in the expression: 'a(b) + c + d' I
- * would expect the 'a(b)' to be reduced to 'ab' first and then or'd with the
- * other expressions. Instead what happens is that a is and'd with the or of
- * a, b, c which seems incorrect. The absorption on the final <term> should
- * force 'a(b)' to be 'ab' before doing the or later.
- */
+/* <or>   = +<var><or> | +<expr><or> */
+void
+g_or (Node &N)
+{
+    match('+');
 
-/*
- * expr  -> !?(<expr>) | <term> | <term><expr> | <term>+<expr>
- */
+    /* input at this point: ab */
+    if (isalnum(look()) && isalnum(look_n(1))) {
+        N.children.push_back(expr());
+    }
+    /* input at this point: ( */
+    else if (look() == '(') {
+        N.children.push_back(sub());
+    }
+    /* input at this point: a */
+    else if (isalnum(look())) {
+        N.values.insert(var());
+    }
+                
+    if (look() == '+') {
+        g_or(N);
+    }
+}
+
+/* <and>  = <var><var><or><and> | <var><expr><and> */
+void
+g_and (Node &N)
+{
+    N.values.insert(var());
+
+    /* input at this point: a+ */
+    if (isalnum(look()) && look_n(1) == '+') {
+        /* 
+         * We make 'and' be left-and-right-associative while the 'or' is 
+         * simply left-associative. This lets us parse expressions like:
+         * a+bc+d into the tree: (+ ad(* bc)) and not (+ a (* b (+ c d)))
+         */
+        N.values.insert(var());
+        Node Or('+');
+        g_or(Or);
+        N.children.push_back(Or);
+    } 
+    /* input at this point: ( */
+    else if (look() == '(') {
+        N.children.push_back(sub());
+    } 
+    /* input at this point: a */
+    else if (isalnum(look())) {
+        N.values.insert(var());
+    }
+
+    if (isalnum(look())) {
+        g_and(N);
+    }
+}
+
+/* <expr> = <sub><expr> | <var> | <var><or><expr> | <var><and><expr> */
 Node
 expr ()
 {
-    bool negate = false;
-    Node n, c;
+    Node N;
+    char c = look();
 
-    /* 
-     * An expression can only be negated if it is wrapped in parentheses.
-     * Otherwise, it means we are negating a single term, e.g. !(ab) vs. !ab
-     */
-    if (look() == '!' && look_n(1) == '(') {
-        match('!');
-        negate = true;
+    if (isalnum(c) && look_n(1) == '+') {
+        N.type = '+';
+        N.values.insert(var());
+        g_or(N);
+        return N;
     }
-
-    if (look() == '(') {
-        match('(');
-        n = expr();
-        match(')');
-        if (negate) {
-            c = Node('!');
-            c.add_child(n);
-            n = c;
-        }
-    } else {
-        n = term();
+    else if (isalnum(c) && (isalnum(look_n(1)) || look_n(1) == '(')) {
+        N.type = '*';
+        g_and(N);
+        return N;
     }
-
-    if (look() == '+') {
-        match('+');
-        c = Node('+');
-        c.add_child(n);
-        c.add_child(expr());
-        n = c;
+    else {
+        N.values.insert(var());
+        return N;
     }
-    /* these characters are the start of another expression */
-    else if (look() == '(' || look() == '!' || isalnum(look())) {
-        c = Node('*');
-        c.add_child(n);
-        c.add_child(expr());
-        n = c;
-    }
-    /* if this isn't the end of an expression or end of input, error */
-    else if (!(look() == ')' || look() == EOF)) {
-        fprintf(stderr, "Unexpected '%c'\n", look());
-        exit(1);
-    }
-
-    return absorb(n);
 }
+
+
 
 Node
 parse_file (const char *inputfile)
@@ -286,8 +242,14 @@ print_tree (Node &n)
 
     for (int i = 0; i < tab; i++)
         printf("   ");
-    printf("%c\n", n.value);
+    printf("%c\n", n.type);
     tab++;
+
+    for (auto c : n.values) {
+        for (int i = 0; i < tab; i++)
+            printf("   ");
+        printf("%c\n", c);
+    }
 
     for (auto c : n.children) {
         print_tree(c);
@@ -300,130 +262,10 @@ print_tree (Node &n)
     }
 }
 
-/*
- * Recursively negate all terms in the expression tree.
- */
-Node
-apply_negation (Node N)
-{
-    return N;
-}
-
-/*
- * Distribute all atomic children to the compound children. Non-recursive, so
- * it only distributes the given Node's children once.
- */
-Node
-distribute (Node N)
-{
-    /* 
-     * Distributing from the left to the right. The left (L) will contain only
-     * atomic nodes that will be distributed to all compound right (R)
-     * children.
-     */
-    std::set<Node> L;
-    std::set<Node> R;
-    char compound_type;
-
-    /* if the Node is outright atomic, we cannot distribute */
-    if (isalnum(N.value))
-        return N;
-
-    /* 
-     * N can never be a negated compound expression because `apply_negation`
-     * applies any negations recursively until there are only negated atomic
-     * values, e.g. !(a+b) => !a!b
-     */
-    if (N.value == '!')
-        return N;
-
-    /*
-     * Because of absorption, all compound statements will be the 'opposite' of
-     * the current root's value.
-     */
-    switch (N.value) {
-        case '*': compound_type = '+'; break;
-        case '+': compound_type = '*'; break;
-    }
-
-    /* gather atomic and compound children into L and R respectively */
-    for (auto c : N.children) {
-        /* 
-         * If value is not the compound type, it is an atomic Node. 
-         * Negated nodes ('!') will always be atomic, see above.
-         */
-        if (c.value != compound_type)
-            L.insert(c);
-        else
-            R.insert(c);
-    }
-
-    /* if all children are constant, we do not need to distribute */
-    if (L.size() == N.children.size())
-        return N;
-
-    N.children.clear();
-
-    /*
-     * For each Node r in R create a new node q with r's value. Loop through
-     * r's children and create a new Node c with N's value where c's children
-     * are L and the current child of r. c is then added as a child of q.
-     */
-    for (auto r : R) {
-        Node q(r.value);
-        for (auto rc : r.children) {
-            Node child(N.value);
-            child.children = L;
-            child.children.insert(rc);
-            q.children.insert(child);
-        }
-        N.children.insert(q);
-    }
-
-    /* If the is only one child in N, that child becomes the new root. */
-    if (N.children.size() == 1)
-        N = (*N.children.begin());
-
-    return N;
-}
-
-/*
- * Recursively reduce all reducable terms in the expression tree.
- */
-Node
-reduce (Node N)
-{
-    return N;
-}
-
-/*
- * Recursively factor out all redundant terms in the expression tree.
- */
-Node
-factor (Node N)
-{
-    return N;
-}
-
 int
 main (int argc, char **argv)
 {
-    Node simp;
-    Node expr;
-    
-    expr = apply_negation(parse_file("input.txt"));
+    Node expr = parse_file("input.txt");
     print_tree(expr);
-
-    simp = distribute(expr);
-    print_tree(simp);
-
-    //while (1) {
-    //    simp = distribute(expr);
-    //    simp = reduce(simp)
-    //    simp = factor(simp)
-    //    if (expr == simp)
-    //        break;
-    //}
-
     return 0;
 }
