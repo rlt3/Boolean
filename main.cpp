@@ -55,7 +55,7 @@ match (char c)
         fprintf(stderr, "Expected character '%c' got '%c'\n", c, look());
         exit(1);
     }
-    printf(" %c ", c);
+    //printf(" %c ", c);
     next();
 }
 
@@ -95,143 +95,28 @@ struct Node {
 
     Node () 
         /* this means 'constant type', i.e a Node with a singular variable */
-        : type('@')
+        : type('+')
     { }
 
     Node (char type) 
         : type(type)
     { }
+
+    void
+    add_child (Node child)
+    {
+        //if (child.type == '@')
+        //    this->add_value(*child.values.begin());
+        //else
+        this->children.push_back(child);
+    }
+
+    void
+    add_value (char value)
+    {
+        this->values.insert(value);
+    }
 };
-
-char var ();
-void g_or (Node &);
-void g_and (Node &);
-Node expr ();
-
-/*
- * var -> [A-Za-z01]
- */
-char
-var ()
-{
-    char c = look();
-    if (!isalnum(c)) {
-        fprintf(stderr, "Expected character instead got '%c'\n", c);
-        exit(1);
-    }
-    match(c);
-    return c;
-}
-
-/*
- * <sub> = (<expr>)
- */
-Node
-sub ()
-{
-    match('(');
-    Node N = expr();
-    match(')');
-    return N;
-}
-
-/* <or>   = +<var><or> | +<expr><or> */
-void
-g_or (Node &N)
-{
-    match('+');
-
-    /* input at this point: ab */
-    if (isalnum(look()) && isalnum(look_n(1))) {
-        N.children.push_back(expr());
-    }
-    /* input at this point: ( */
-    else if (look() == '(') {
-        N.children.push_back(sub());
-    }
-    /* input at this point: a */
-    else if (isalnum(look())) {
-        N.values.insert(var());
-    }
-                
-    if (look() == '+') {
-        g_or(N);
-    }
-}
-
-/* <and>  = <var><var><or><and> | <var><expr><and> */
-void
-g_and (Node &N)
-{
-    N.values.insert(var());
-
-    /* input at this point: a+ */
-    if (isalnum(look()) && look_n(1) == '+') {
-        /* 
-         * We make 'and' be left-and-right-associative while the 'or' is 
-         * simply left-associative. This lets us parse expressions like:
-         * a+bc+d into the tree: (+ ad(* bc)) and not (+ a (* b (+ c d)))
-         */
-        N.values.insert(var());
-        Node Or('+');
-        g_or(Or);
-        N.children.push_back(Or);
-    } 
-    /* input at this point: ( */
-    else if (look() == '(') {
-        N.children.push_back(sub());
-    } 
-    /* input at this point: a */
-    else if (isalnum(look())) {
-        N.values.insert(var());
-    }
-
-    if (isalnum(look())) {
-        g_and(N);
-    }
-}
-
-/* <expr> = <sub><expr> | <var> | <var><or><expr> | <var><and><expr> */
-Node
-expr ()
-{
-    Node N;
-    char c = look();
-
-    if (isalnum(c) && look_n(1) == '+') {
-        N.type = '+';
-        N.values.insert(var());
-        g_or(N);
-        return N;
-    }
-    else if (isalnum(c) && (isalnum(look_n(1)) || look_n(1) == '(')) {
-        N.type = '*';
-        g_and(N);
-        return N;
-    }
-    else {
-        N.values.insert(var());
-        return N;
-    }
-}
-
-Node
-parse_file (const char *inputfile)
-{
-    Node n;
-    INPUT_FILE = fopen(inputfile, "r");
-    if (!INPUT_FILE) {
-        perror(strerror(errno));
-        exit(1);
-    }
-    /* set look to whitespace because 'next' loops until no whitespace */
-    LOOKAHEAD = ' ';
-    next();
-    n = expr();
-    printf("\n");
-    fclose(INPUT_FILE);
-    return n;
-}
 
 void
 print_tree (Node &n)
@@ -258,6 +143,129 @@ print_tree (Node &n)
         tab = 0;
         printf("-------------------------------\n");
     }
+}
+
+char var ();
+void prod (Node &);
+void expr (Node &);
+
+/*
+ * var = [A-Za-z01]
+ */
+char
+var ()
+{
+    char c = look();
+    if (!isalnum(c)) {
+        fprintf(stderr, "Expected character instead got '%c'\n", c);
+        exit(1);
+    }
+    match(c);
+    return c;
+}
+
+void
+absorb (Node &parent)
+{
+    std::vector<Node> absorbed_children;
+    std::set<char> absorbed_values;
+    std::vector<int> nodes_to_remove;
+
+    for (unsigned i = 0; i < parent.children.size(); i++) {
+        const auto &child = parent.children[i];
+
+        if (child.children.size() != 1)
+            continue;
+
+        if (child.children[0].type != parent.type)
+            continue;
+
+        nodes_to_remove.push_back(i);
+        absorbed_children.push_back(child.children[0]);
+        for (auto v : child.values)
+            absorbed_values.insert(v);
+    }
+
+    for (auto &i : nodes_to_remove)
+        parent.children.erase(parent.children.begin() + i);
+    for (auto &c : absorbed_children)
+        parent.children.push_back(c);
+    for (auto &v : absorbed_values)
+        parent.values.insert(v);
+}
+
+/*
+ * <prod> = (<expr>)<prod> | <var><prod> | <var>
+ */
+void
+prod (Node &N)
+{
+    while (1) {
+        if (look() == '(') {
+            match('(');
+            Node E('+');
+            expr(E);
+            absorb(E);
+            if (E.children.size() == 1 && E.values.size() == 0) {
+                N.add_child(E.children[0]);
+            } else {
+                N.add_child(E);
+            }
+            match(')');
+        }
+        else if (isalnum(look())) {
+            N.add_value(var());
+        }
+
+        if (!(look() == '(' || isalnum(look())))
+            break;
+    }
+}
+
+/*
+* <expr> = <var> | <var>+<expr> | <prod> | <prod>+<expr>
+ */
+void
+expr (Node &N)
+{
+    while (1) {
+        if (isalnum(look()) && (look_n(1) == '+' || look_n(1) == EOF || look_n(1) == ')')) {
+            N.add_value(var());
+        }
+        else {
+            Node P('*');
+            prod(P);
+            if (P.children.size() == 1 && P.values.size() == 0) {
+                N.add_child(P.children[0]);
+            } else {
+                N.add_child(P);
+            }
+        }
+
+        if (look() != '+')
+            break;
+        match('+');
+    }
+}
+
+Node
+parse_file (const char *inputfile)
+{
+    Node N;
+    INPUT_FILE = fopen(inputfile, "r");
+    if (!INPUT_FILE) {
+        perror(strerror(errno));
+        exit(1);
+    }
+    /* set look to whitespace because 'next' loops until no whitespace */
+    LOOKAHEAD = ' ';
+    next();
+    expr(N);
+    if (N.children.size() == 1 && N.values.size() == 0)
+        N = N.children[0];
+    printf("\n");
+    fclose(INPUT_FILE);
+    return N;
 }
 
 int
