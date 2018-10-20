@@ -171,10 +171,16 @@ absorb (Node &parent)
     std::set<char> absorbed_values;
     std::vector<int> nodes_to_remove;
 
+    if (parent.type == '!')
+        return;
+
     for (unsigned i = 0; i < parent.children.size(); i++) {
         const auto &child = parent.children[i];
 
         if (child.children.size() != 1)
+            continue;
+
+        if (child.type == '!')
             continue;
 
         if (child.children[0].type != parent.type)
@@ -206,7 +212,7 @@ prod (Node &N)
             Node E('+');
             expr(E);
             absorb(E);
-            if (E.children.size() == 1 && E.values.size() == 0) {
+            if (E.type != '!' && E.children.size() == 1 && E.values.size() == 0) {
                 N.add_child(E.children[0]);
             } else {
                 N.add_child(E);
@@ -223,13 +229,25 @@ prod (Node &N)
 }
 
 /*
-* <expr> = <var> | <var>+<expr> | <prod> | <prod>+<expr>
+ * <expr> = !<expr> | <var> | <var>+<expr> | <prod> | <prod>+<expr>
  */
 void
 expr (Node &N)
 {
     while (1) {
-        if (isalnum(look()) && (look_n(1) == '+' || look_n(1) == EOF || look_n(1) == ')')) {
+        if (look() == '!') {
+            match('!');
+            Node Neg('!');
+            Node E('+');
+            expr(E);
+            if (E.type != '!' && E.children.size() == 1 && E.values.size() == 0) {
+                Neg.add_child(E.children[0]);
+            } else {
+                Neg.add_child(E);
+            }
+            N.add_child(Neg);
+        }
+        else if (isalnum(look()) && (look_n(1) == '+' || look_n(1) == EOF || look_n(1) == ')')) {
             N.add_value(var());
         }
         else {
@@ -261,11 +279,38 @@ parse_file (const char *inputfile)
     LOOKAHEAD = ' ';
     next();
     expr(N);
-    if (N.children.size() == 1 && N.values.size() == 0)
+    if (N.type != '!' && N.children.size() == 1 && N.values.size() == 0)
         N = N.children[0];
     printf("\n");
     fclose(INPUT_FILE);
     return N;
+}
+
+void
+print_logical (Node &N)
+{
+    static int depth = 0;
+
+    for (auto &child : N.values) {
+        printf("%c", child);
+        if (N.type == '+' && (N.children.size() > 0 || child != *std::prev(N.values.end())))
+            printf("%c", N.type);
+    }
+
+    depth++;
+    for (unsigned i = 0; i < N.children.size(); i++) {
+        if (N.type == N.children[i].type)
+            printf("(");
+        print_logical(N.children[i]);
+        if (N.type == N.children[i].type)
+            printf(")");
+        if (N.type == '+' && i != N.children.size() - 1)
+            printf("%c", N.type);
+    }
+    depth--;
+
+    if (depth == 0)
+        printf("\n");
 }
 
 int
@@ -273,5 +318,6 @@ main (int argc, char **argv)
 {
     Node expr = parse_file("input.txt");
     print_tree(expr);
+    //print_logical(expr);
     return 0;
 }
