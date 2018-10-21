@@ -60,37 +60,8 @@ match (char c)
 }
 
 struct Node {
-    /*
-     * a set of character values.
-     * a vector of children.
-     * a type.
-     *
-     * constant expressions would have no children, e.g. a+b+c or abc.
-     * otherwise there are children, e.g. a+(bc)+d
-     * instead of having an actual node for values, it is simply a character
-     * which keeps values very, very simple and makes 'sets' 10x easier to use.
-     * that's the goal: use c++'s strengths and stop forcing shit with weird
-     * overloading of operators because we have a weird nested type as a set.
-     * YOU WILL SEE A DRAMATIC INCREASE IN PRODUCTIVITY THIS WAY
-     *
-     * <var>  = [A-Za-z01]
-     * <sub>  = (<expr>)
-     * <or>   = +<var><or> | +<sub> | E
-     * <and>  = <var><and> | <sub> | E
-     * <expr> = <sub><expr> | <var> | <var><or><expr> | <var><and><expr>
-     *
-     * In this grammar, every time <expr> is called it creates a new Node. That
-     * node exists and is used as long as there is a single compound type being
-     * used or a single variable is read, e.g. a+b+c is first read as a 
-     * <var><or><expr> where <or> is recursive and thus will simply 'fill' up
-     * that single expression node until it cannot. Any call to <expr> will add
-     * its return value as a child to the current node it has. This will remove
-     * any need for an absorption function immediately after parsing (and
-     * possibly in general).
-     *
-     */
     char type;
-    std::set<char> values;
+    std::set<std::string> values;
     std::vector<Node> children;
 
     Node () 
@@ -105,14 +76,11 @@ struct Node {
     void
     add_child (Node child)
     {
-        //if (child.type == '@')
-        //    this->add_value(*child.values.begin());
-        //else
         this->children.push_back(child);
     }
 
     void
-    add_value (char value)
+    add_value (std::string value)
     {
         this->values.insert(value);
     }
@@ -131,7 +99,7 @@ print_tree (Node &n)
     for (auto c : n.values) {
         for (int i = 0; i < tab; i++)
             printf("   ");
-        printf("%c\n", c);
+        printf("%s\n", c.c_str());
     }
 
     for (auto c : n.children) {
@@ -145,30 +113,38 @@ print_tree (Node &n)
     }
 }
 
-char var ();
+std::string var ();
 void prod (Node &);
 void expr (Node &);
 
 /*
- * var = [A-Za-z01]
+ * var = !?[A-Za-z01]
  */
-char
+std::string
 var ()
 {
-    char c = look();
-    if (!isalnum(c)) {
-        fprintf(stderr, "Expected character instead got '%c'\n", c);
+    std::string v;
+
+    if (look() == '!') {
+        match('!');
+        v += '!';
+    }
+
+    if (!isalnum(look())) {
+        fprintf(stderr, "Expected character instead got '%c'\n", look());
         exit(1);
     }
-    match(c);
-    return c;
+    v += look();
+    match(look());
+
+    return v;
 }
 
 void
 absorb (Node &parent)
 {
     std::vector<Node> absorbed_children;
-    std::set<char> absorbed_values;
+    std::set<std::string> absorbed_values;
     std::vector<int> nodes_to_remove;
 
     if (parent.type == '!')
@@ -201,54 +177,69 @@ absorb (Node &parent)
 }
 
 /*
- * <prod> = (<expr>)<prod> | <var><prod> | <var>
+ * <prod> = <expr><prod> | <var><prod> | <var>
  */
 void
 prod (Node &N)
 {
     while (1) {
-        if (look() == '(') {
-            match('(');
+        if (look() == '(' || (look() == '!' && look_n(1) == '(')) {
             Node E('+');
             expr(E);
             absorb(E);
+
             if (E.type != '!' && E.children.size() == 1 && E.values.size() == 0) {
-                N.add_child(E.children[0]);
-            } else {
-                N.add_child(E);
+                E = E.children[0];
             }
-            match(')');
+
+            N.add_child(E);
         }
-        else if (isalnum(look())) {
+        else if (look() == '!' || isalnum(look())) {
             N.add_value(var());
         }
 
-        if (!(look() == '(' || isalnum(look())))
+        if (!(look() == '(' || look() == '!' || isalnum(look())))
             break;
     }
 }
 
 /*
- * <expr> = !<expr> | <var> | <var>+<expr> | <prod> | <prod>+<expr>
+ * <expr> = !?(<expr>) | <var> | <var>+<expr> | <prod> | <prod>+<expr>
  */
 void
 expr (Node &N)
 {
     while (1) {
-        if (look() == '!') {
-            match('!');
-            Node Neg('!');
+        if (look() == '(' || (look() == '!' && look_n(1) == '(')) {
+            bool is_negated = false;
+
+            if (look() == '!') {
+                match('!');
+                is_negated = true;
+            }
+
+            match('(');
             Node E('+');
             expr(E);
+
+            /* sub-expression is part of product of expressions */
+            if (look() != ')' && (look() == '!' || isalnum(look()))) {
+                E.type = '*';
+                prod(E);
+            } 
+            match(')');
+
             if (E.type != '!' && E.children.size() == 1 && E.values.size() == 0) {
-                Neg.add_child(E.children[0]);
-            } else {
-                Neg.add_child(E);
+                E = E.children[0];
             }
-            N.add_child(Neg);
-        }
-        else if (isalnum(look()) && (look_n(1) == '+' || look_n(1) == EOF || look_n(1) == ')')) {
-            N.add_value(var());
+
+            if (is_negated) {
+                Node Neg('!');
+                Neg.add_child(E);
+                E = Neg;
+            }
+
+            N.add_child(E);
         }
         else {
             Node P('*');
@@ -292,7 +283,7 @@ print_logical (Node &N)
     static int depth = 0;
 
     for (auto &child : N.values) {
-        printf("%c", child);
+        printf("%s", child.c_str());
         if (N.type == '+' && (N.children.size() > 0 || child != *std::prev(N.values.end())))
             printf("%c", N.type);
     }

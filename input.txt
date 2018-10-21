@@ -1,1 +1,1 @@
-!(abcd+!(efgh+xyz))
+!(a!(!bc)d+!(!(!(e!f)gh)+!xyz))
