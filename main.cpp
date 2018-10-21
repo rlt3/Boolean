@@ -55,7 +55,7 @@ match (char c)
         fprintf(stderr, "Expected character '%c' got '%c'\n", c, look());
         exit(1);
     }
-    //printf(" %c ", c);
+    printf(" %c ", c);
     next();
 }
 
@@ -222,11 +222,18 @@ expr (Node &N)
             Node E('+');
             expr(E);
 
-            /* sub-expression is part of product of expressions */
+            /* 
+             * sub-expression is not isolated and is part of a sum of products,
+             * so we call 'expr' to gather all other sums of products and add
+             * the current parsed nodes (E) to the other parsed sums.
+             */
             if (look() != ')' && (look() == '!' || isalnum(look()))) {
-                E.type = '*';
-                prod(E);
+                Node S('+');
+                expr(S);
+                S.children[0].children.push_back(E.children[0]);
+                E = S;
             } 
+
             match(')');
 
             if (E.type != '!' && E.children.size() == 1 && E.values.size() == 0) {
