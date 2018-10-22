@@ -295,6 +295,15 @@ print_logical (Node &N)
 {
     static int depth = 0;
 
+    if (N.type == '!') {
+        printf("!(");
+        depth++;
+        print_logical(N.children[0]);
+        depth--;
+        printf(")");
+        goto exit;
+    }
+
     for (auto &child : N.values) {
         printf("%s", child.c_str());
         if (N.type == '+' && (N.children.size() > 0 || child != *std::prev(N.values.end())))
@@ -313,6 +322,7 @@ print_logical (Node &N)
     }
     depth--;
 
+exit:
     if (depth == 0)
         printf("\n");
 }
@@ -322,6 +332,6 @@ main (int argc, char **argv)
 {
     Node expr = parse_file("input.txt");
     print_tree(expr);
-    //print_logical(expr);
+    print_logical(expr);
     return 0;
 }
