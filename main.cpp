@@ -55,9 +55,12 @@ match (char c)
         fprintf(stderr, "Expected character '%c' got '%c'\n", c, look());
         exit(1);
     }
-    printf(" %c ", c);
+    //printf(" %c ", c);
     next();
 }
+
+struct Node;
+void print_tree(Node &N);
 
 struct Node {
     char type;
@@ -65,13 +68,24 @@ struct Node {
     std::vector<Node> children;
 
     Node () 
-        /* this means 'constant type', i.e a Node with a singular variable */
         : type('+')
     { }
 
     Node (char type) 
         : type(type)
     { }
+
+    void
+    add_child_value (Node child)
+    {
+        if (child.children.size() == 0 && child.values.size() == 1) {
+            this->add_value(*child.values.begin());
+        } else if (child.children.size() == 1 && child.values.size() == 0) {
+            this->add_child(child.children[0]);
+        } else {
+            this->add_child(child);
+        }
+    }
 
     void
     add_child (Node child)
@@ -114,8 +128,10 @@ print_tree (Node &n)
 }
 
 std::string var ();
-void prod (Node &);
-void expr (Node &);
+Node sub ();
+Node negate ();
+Node prod ();
+Node expr ();
 
 /*
  * var = !?[A-Za-z01]
@@ -140,140 +156,98 @@ var ()
     return v;
 }
 
-void
-absorb (Node &parent)
+/*
+ * <sub> = (<expr>)
+ */
+Node
+sub ()
 {
-    std::vector<Node> absorbed_children;
-    std::set<std::string> absorbed_values;
-    std::vector<int> nodes_to_remove;
-
-    if (parent.type == '!')
-        return;
-
-    for (unsigned i = 0; i < parent.children.size(); i++) {
-        const auto &child = parent.children[i];
-
-        if (child.children.size() != 1)
-            continue;
-
-        if (child.type == '!')
-            continue;
-
-        if (child.children[0].type != parent.type)
-            continue;
-
-        nodes_to_remove.push_back(i);
-        absorbed_children.push_back(child.children[0]);
-        for (auto v : child.values)
-            absorbed_values.insert(v);
-    }
-
-    for (auto &i : nodes_to_remove)
-        parent.children.erase(parent.children.begin() + i);
-    for (auto &c : absorbed_children)
-        parent.children.push_back(c);
-    for (auto &v : absorbed_values)
-        parent.values.insert(v);
+    match('(');
+    Node N = expr();
+    match(')');
+    return N;
 }
 
 /*
- * <prod> = <expr><prod> | <var><prod> | <var>
+ * <negate> = !(<expr>)
  */
-void
-prod (Node &N)
+Node
+negate ()
 {
+    Node N('!');
+    match('!');
+    match('(');
+    N.add_child(expr());
+    match(')');
+    return N;
+}
+
+/*
+ * <prod> = <negate><prod> | <sub><prod> | <var><prod> | E
+ */
+Node
+prod ()
+{
+    Node N('*');
+
     while (1) {
-        if (look() == '(' || (look() == '!' && look_n(1) == '(')) {
-            Node E('+');
-            expr(E);
-            absorb(E);
-
-            if (E.type != '!' && E.children.size() == 1 && E.values.size() == 0) {
-                E = E.children[0];
-            }
-
-            N.add_child(E);
-        }
-        else if (look() == '!' || isalnum(look())) {
+        if (look() == '!' && look_n(1) == '(')
+            N.add_child(negate());
+        else if (look() == '(')
+            N.add_child(sub());
+        else if (isalnum(look()) || (look() == '!' && isalnum(look_n(1))))
             N.add_value(var());
-        }
 
-        if (!(look() == '(' || look() == '!' || isalnum(look())))
+        if (look() == '+' || look() == ')' || look() == EOF)
             break;
     }
+
+    return N;
 }
 
 /*
- * <expr> = !?(<expr>) | <var> | <var>+<expr> | <prod> | <prod>+<expr>
+ * <expr> = <prod> | <prod>+<expr>
  */
-void
-expr (Node &N)
+Node
+expr ()
 {
-    while (1) {
-        if (look() == '(' || (look() == '!' && look_n(1) == '(')) {
-            bool is_negated = false;
+    /* use a sentinel value not in language to mark 'unset' */
+    Node N('@');
 
-            if (look() == '!') {
-                match('!');
-                is_negated = true;
-            }
+    while (look() != EOF) {
+        Node P = prod();
 
-            match('(');
-            Node E('+');
-            expr(E);
+        N.add_child_value(P);
 
-            /* 
-             * sub-expression is not isolated and is part of a sum of products,
-             * so we call 'expr' to gather all other sums of products and add
-             * the current parsed nodes (E) to the other parsed sums.
-             */
-            if (look() != ')' && (look() == '!' || isalnum(look()))) {
-                Node S('+');
-                expr(S);
-                S.children[0].children.push_back(E.children[0]);
-                E = S;
-            } 
-
-            match(')');
-
-            if (E.type != '!' && E.children.size() == 1 && E.values.size() == 0) {
-                E = E.children[0];
-            }
-
-            if (is_negated) {
-                Node Neg('!');
-                Neg.add_child(E);
-                E = Neg;
-            }
-
-            N.add_child(E);
-        }
-        else {
-            Node P('*');
-            prod(P);
-            /* if we have a product of a single child, add child to sum */
-            if (P.children.size() == 1 && P.values.size() == 0) {
-                N.add_child(P.children[0]);
-            }
-            /* handles products of a single value, adding it directly to sum */
-            else if (P.children.size() == 0 && P.values.size() == 1) {
-                N.add_value(*P.values.begin());
-            }
-            else {
-                N.add_child(P);
-            }
+        /* 
+         * Anytime we find an disjunction ('+') then we make sure N has that
+         * type. Note that a disjunction can overwrite a conjunction but not
+         * vice-versa.
+         */
+        if (look() == '+') {
+            N.type = '+';
+            match('+');
+        } else if (N.type == '@') {
+            N.type = '*';
         }
 
-        if (look() != '+')
+        if (look() == EOF || look() == ')')
             break;
-        match('+');
     }
+
+    /* 
+     * if we have an expression of a single child, e.g. a or (b) or ((c+d))
+     * then make that child the root and return it
+     */
+    if (N.children.size() == 1 && N.values.size() == 0)
+        N = N.children[0];
+
+    return N;
 }
 
 Node
 parse_file (const char *inputfile)
 {
-    Node N;
     INPUT_FILE = fopen(inputfile, "r");
     if (!INPUT_FILE) {
         perror(strerror(errno));
@@ -282,7 +256,7 @@ parse_file (const char *inputfile)
     /* set look to whitespace because 'next' loops until no whitespace */
     LOOKAHEAD = ' ';
     next();
-    expr(N);
+    Node N = expr();
     if (N.type != '!' && N.children.size() == 1 && N.values.size() == 0)
         N = N.children[0];
     printf("\n");
