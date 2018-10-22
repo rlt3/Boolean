@@ -251,9 +251,15 @@ expr (Node &N)
         else {
             Node P('*');
             prod(P);
+            /* if we have a product of a single child, add child to sum */
             if (P.children.size() == 1 && P.values.size() == 0) {
                 N.add_child(P.children[0]);
-            } else {
+            }
+            /* handles products of a single value, adding it directly to sum */
+            else if (P.children.size() == 0 && P.values.size() == 1) {
+                N.add_value(*P.values.begin());
+            }
+            else {
                 N.add_child(P);
             }
         }
