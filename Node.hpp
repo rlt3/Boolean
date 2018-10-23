@@ -38,17 +38,19 @@ struct Node {
      * value), then that child can be added to the parent directly. Never do
      * this for a negated expression because all negated expressions have a 
      * single child.
+     * If the given child is the same type as the parent, then we can directly
+     * add all its children and values to the parent.
      */
     void
     add_reduction (Node child)
     {
         if (child.type == '!') {
             this->add_child(child);
-        //} else if (child.type == this->type) {
-        //    for (auto &grandchild : child.children)
-        //        this->add_child(grandchild);
-        //    for (auto &val : child.values)
-        //        this->add_value(val);
+        } else if (child.type == this->type) {
+            for (auto &grandchild : child.children)
+                this->add_child(grandchild);
+            for (auto &val : child.values)
+                this->add_value(val);
         } else if (child.children.size() == 0 && child.values.size() == 1) {
             this->add_value(*child.values.begin());
         } else if (child.children.size() == 1 && child.values.size() == 0) {

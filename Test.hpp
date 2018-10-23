@@ -86,7 +86,7 @@ protected:
                     N.add_value(add_var(rng));
                     break;
                 case 's':
-                    N.add_child(add_sub(fail_chance, rng));
+                    N.add_reduction(add_sub(fail_chance, rng));
                     break;
                 case '!':
                     N.add_child(add_negation(fail_chance, rng));
@@ -126,7 +126,7 @@ protected:
     add_negation (int &fail_chance, std::mt19937_64 &rng)
     {
         Node N('!');
-        N.add_child(rand_node(fail_chance, rng));
+        N.add_reduction(rand_node(fail_chance, rng));
         return N;
     }
 };
