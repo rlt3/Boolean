@@ -1,3 +1,6 @@
+#ifndef PARSE_HPP
+#define PARSE_HPP
+
 #include <iostream>
 #include <sstream>
 #include <cstdio>
@@ -201,3 +204,4 @@ parse_input ()
     return expr();
 }
 
+#endif

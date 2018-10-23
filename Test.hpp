@@ -1,6 +1,7 @@
 #ifndef TEST_HPP
 #define TEST_HPP
 
+#include "Parse.hpp"
 #include <random>
 #include <vector>
 #include <algorithm>
@@ -15,15 +16,27 @@ public:
     {
         std::random_device device;
         std::mt19937_64 rng(device());
+        std::string input;
         int fail_chance = 0;
+        Node Tree, E;
+
         Tree = rand_node(fail_chance, rng);
-        Tree.print_tree();
-        Tree.print_logical();
+        input = Tree.logical_str();
+        INPUT.str(input);
+        E = parse_input();
+
+        if (!(Tree == E)) {
+            fprintf(stderr, "Input fails to reproduce itself: '%s'\n", input.c_str());
+            Tree.print_tree();
+            E.print_tree();
+            exit(1);
+        } else {
+            printf("'%s':\n", input.c_str());
+            E.print_tree();
+        }
     }
 
 protected:
-    Node Tree;
-
     /* 
      * Recursively generate a tree of nodes. Each 'action' done increases the
      * probability of failure by 5%. Each action is randomly chosen from a list

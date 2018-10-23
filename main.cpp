@@ -26,7 +26,7 @@ main (int argc, char **argv)
 
     //Node expr = parse_input();
     //expr.print_tree();
-    //expr.print_logical();
+    //std::cout << expr.logical_str() << std::endl;
 
     return 0;
 }

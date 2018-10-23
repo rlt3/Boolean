@@ -18,6 +18,27 @@ struct Node {
         : type(type)
     { }
 
+    bool
+    operator== (const Node &other) const
+    {
+        if (this->type != other.type) {
+            return false;
+        }
+        /* compare values first */
+        if (this->values != other.values) {
+            return false;
+        }
+        /* finally recursively check each child */
+        for (auto &child : this->children) {
+            for (auto &other_child : other.children) {
+                if (!(child == other_child)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     /* Reduce the child before adding it as a value or child */
     void
     add_reduction (Node child)
@@ -44,10 +65,10 @@ struct Node {
     }
 
     void
-    print_tree ()
+    print_tree () const
     {
         static int tab = 0;
-        Node &N = *this;
+        const Node &N = *this;
 
         for (int i = 0; i < tab; i++)
             printf("   ");
@@ -71,53 +92,36 @@ struct Node {
         }
     }
 
-    void
-    print_logical ()
+    std::string
+    logical_str () const
     {
-        static int depth = 0;
-        unsigned last_child;
-        Node &N = *this;
+        std::string str;
+        const Node &N = *this;
 
         /* negation just adds the obvious expression negation */
         if (N.type == '!') {
-            printf("!(");
-            depth++;
-            this->children[0].print_logical();
-            depth--;
-            printf(")");
-            goto exit;
+            str += "!(";
+            str += this->children[0].logical_str();
+            str += ")";
+            return str;
         }
 
         for (auto &var : N.values) {
-            printf("%s", var.c_str());
+            str += var;
             /* always add the plus even at the end if there's children to print */
             if (N.type == '+' && (N.children.size() > 0 || var != *std::prev(N.values.end())))
-                printf("%c", N.type);
+                str += N.type;
         }
 
-        depth++;
-
-        last_child = N.children.size() - 1;
         for (unsigned i = 0; i < N.children.size(); i++) {
-            /* if child's next or prev is same type it needs parentheses */
-            if ((i < last_child && N.children[i].type == N.children[i+1].type) ||
-                (i > 0 && N.children[i].type == N.children[i-1].type)) {
-                printf("(");
-                N.children[i].print_logical();
-                printf(")");
-            }
-            /* otherwise just print it normally */
-            else {
-                N.children[i].print_logical();
-            }
-            if (N.type == '+' && i != last_child)
-                printf("%c", N.type);
+            str += "(";
+            str += N.children[i].logical_str();
+            str += ")";
+            if (N.type == '+' && i != N.children.size() - 1)
+                str += N.type;
         }
-        depth--;
 
-    exit:
-        if (depth == 0)
-            printf("\n");
+        return str;
     }
 };
 
