@@ -17,22 +17,24 @@ public:
         std::random_device device;
         std::mt19937_64 rng(device());
         std::string input;
-        int fail_chance = 0;
+        int fail_chance;
         Node Tree, E;
 
-        Tree = rand_node(fail_chance, rng);
-        input = Tree.logical_str();
-        INPUT.str(input);
-        E = parse_input();
+        for (int i = 0; i < 1000; i++) {
+            fail_chance = 0;
 
-        if (!(Tree == E)) {
-            fprintf(stderr, "Input fails to reproduce itself: '%s'\n", input.c_str());
-            Tree.print_tree();
-            E.print_tree();
-            exit(1);
-        } else {
-            printf("'%s':\n", input.c_str());
-            E.print_tree();
+            Tree = rand_node(fail_chance, rng);
+            input = Tree.logical_str();
+            INPUT.clear();
+            INPUT.str(input);
+            E = parse_input();
+
+            if (!(Tree == E)) {
+                fprintf(stderr, "%d: Input fails to reproduce itself: '%s'\n", i, input.c_str());
+                Tree.print_tree();
+                E.print_tree();
+                exit(1);
+            }
         }
     }
 
@@ -65,20 +67,8 @@ protected:
         
         while (1) {
             rand = action_choice(rng);
-            if (rand < fail_chance) {
-                /* 
-                 * A node must have at least two operands. This will catch all
-                 * potential states a node can be that will *not* satisfy
-                 * having a node with operands.
-                 */
-                if (N.children.size() == 0 && N.values.size() == 0)
-                    N.add_value(add_var(rng));
-                if (N.children.size() == 1 && N.values.size() == 0)
-                    N.add_value(add_var(rng));
-                if (N.children.size() == 0 && N.values.size() == 1)
-                    N.add_value(add_var(rng));
+            if (rand < fail_chance)
                 break;
-            }
 
             rand = action_choice(rng);
 
@@ -101,12 +91,12 @@ protected:
                 case '!':
                     N.add_child(add_negation(fail_chance, rng));
                     break;
-                default:
-                    fprintf(stderr, "Error, generated: %d\n", rand);
-                    exit(1);
             }
         }
 
+        /* A node must have at least two operands */
+        while (N.children.size() + N.values.size() < 2)
+            N.add_value(add_var(rng));
         return N;
     }
 
