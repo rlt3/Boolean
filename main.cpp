@@ -13,7 +13,6 @@ int
 main (int argc, char **argv)
 {
     Test T;
-
     T.generate();
 
     //if (argc != 2)

@@ -126,8 +126,12 @@ negate ()
     Node N('!');
     match('!');
     match('(');
-    N.add_child(expr());
+    N.add_reduction(expr());
     match(')');
+    if (N.children.size() + N.values.size() > 1) {
+        fprintf(stderr, "Negation produces node with >1 child\n");
+        exit(1);
+    }
     return N;
 }
 
@@ -143,7 +147,7 @@ prod ()
         if (look() == '!' && look_n(1) == '(')
             N.add_child(negate());
         else if (look() == '(')
-            N.add_child(sub());
+            N.add_reduction(sub());
         else if (is_var())
             N.add_value(var());
         else

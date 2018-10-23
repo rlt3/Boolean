@@ -33,11 +33,23 @@ struct Node {
         return true;
     }
 
-    /* Reduce the child before adding it as a value or child */
+    /* 
+     * If the given child has just a single operand (a single child or a single
+     * value), then that child can be added to the parent directly. Never do
+     * this for a negated expression because all negated expressions have a 
+     * single child.
+     */
     void
     add_reduction (Node child)
     {
-        if (child.children.size() == 0 && child.values.size() == 1) {
+        if (child.type == '!') {
+            this->add_child(child);
+        //} else if (child.type == this->type) {
+        //    for (auto &grandchild : child.children)
+        //        this->add_child(grandchild);
+        //    for (auto &val : child.values)
+        //        this->add_value(val);
+        } else if (child.children.size() == 0 && child.values.size() == 1) {
             this->add_value(*child.values.begin());
         } else if (child.children.size() == 1 && child.values.size() == 0) {
             this->add_child(child.children[0]);
@@ -95,7 +107,11 @@ struct Node {
         /* negation just adds the obvious expression negation */
         if (N.type == '!') {
             str += "!(";
-            str += this->children[0].logical_str();
+            if (N.children.size() == 1) {
+                str += N.children[0].logical_str();
+            } else {
+                str += *N.values.begin();
+            }
             str += ")";
             return str;
         }
