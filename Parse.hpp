@@ -208,4 +208,11 @@ parse_input ()
     return expr();
 }
 
+void
+set_input (std::string input)
+{
+    INPUT.clear();
+    INPUT.str(input);
+}
+
 #endif
