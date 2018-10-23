@@ -21,21 +21,15 @@ struct Node {
     bool
     operator== (const Node &other) const
     {
-        if (this->type != other.type) {
+        if (this->type != other.type)
             return false;
-        }
-        /* compare values first */
-        if (this->values != other.values) {
+        if (this->values != other.values)
             return false;
-        }
-        /* finally recursively check each child */
-        for (auto &child : this->children) {
-            for (auto &other_child : other.children) {
-                if (!(child == other_child)) {
-                    return false;
-                }
-            }
-        }
+        if (this->children.size() != other.children.size())
+            return false;
+        for (unsigned i = 0; i < this->children.size(); i++)
+            if (!(this->children[i] == other.children[i]))
+                return false;
         return true;
     }
 
