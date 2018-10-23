@@ -1,5 +1,6 @@
 #include "Node.hpp"
 #include "Parse.hpp"
+#include "Test.hpp"
 
 void
 usage (char *prog)
@@ -11,17 +12,21 @@ usage (char *prog)
 int
 main (int argc, char **argv)
 {
-    if (argc != 2)
-        usage(argv[0]);
+    Test T;
 
-    if (strlen(argv[1]) == 0)
-        usage(argv[0]);
+    T.generate();
 
-    INPUT.str(std::string(argv[1]));
+    //if (argc != 2)
+    //    usage(argv[0]);
 
-    Node expr = parse_input();
-    expr.print_tree();
-    expr.print_logical();
+    //if (strlen(argv[1]) == 0)
+    //    usage(argv[0]);
+
+    //INPUT.str(std::string(argv[1]));
+
+    //Node expr = parse_input();
+    //expr.print_tree();
+    //expr.print_logical();
 
     return 0;
 }
