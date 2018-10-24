@@ -107,9 +107,77 @@ recurse:
     return parent;
 }
 
+/*
+ * This distributes nodes at a certain depth and only does a single
+ * distribution of terms, i.e. it is not a recursive distributor. For example,
+ * if `start_depth' is 0, then the root node of the tree given will be
+ * distributed. If `start_depth` is 1, then the children of the root node will
+ * be distributed, etc.
+ */
+Node
+distribute (Node &parent, const int depth, const int start_depth)
+{
+    std::vector<Node> dist_children;
+
+    if (depth < start_depth) {
+        for (auto &child : parent.children)
+            dist_children.push_back(distribute(child, depth + 1, start_depth));
+        parent.children.clear();
+        for (auto child : dist_children)
+            parent.add_reduction(child);
+        return parent;
+    }
+
+    /* nothing to distribute */
+    if (parent.children.size() == 0 || parent.values.size() == 0)
+        return parent;
+
+    /* Distribute multiple children so we can reduce to Nodes with one child */
+    if (parent.children.size() > 1) {
+        /* 
+         * Since we are distributing values *over* some operation, we create a
+         * new node that represents that operation for each child. That child
+         * is added as a child to that node.
+         */
+        for (auto &child : parent.children) {
+            Node N = Node(parent.type);
+            N.values = parent.values;
+            N.add_child(child);
+            dist_children.push_back(N);
+        }
+    }
+    /* 
+     * Distributing over a single child is the last operation before a node
+     * becomes 'undistributable' which is the goal of the algorithm.
+     */
+    else {
+        Node &child = parent.children[0];
+        for (auto &val : child.values) {
+            Node N = Node(parent.type);
+            N.values = parent.values;
+            N.add_value(val);
+            dist_children.push_back(N);
+        }
+    }
+
+    /* parent has no values now because they have been distributed */
+    parent.values.clear();
+
+    /* and parent gets a new type and the distribute children */
+    switch (parent.type) {
+        case '+': parent.type = '*'; break;
+        case '*': parent.type = '+'; break;
+    }
+    parent.children = dist_children;
+
+    return parent;
+}
+
 int
 main (int argc, char **argv)
 {
+    Node expr, dist;
+
     if (argc != 2)
         usage(argv[0]);
 
@@ -118,10 +186,23 @@ main (int argc, char **argv)
 
     set_input(std::string(argv[1]));
 
-    Node expr = parse_input();
+    expr = parse_input();
+    negate(expr);
     expr.print_tree();
 
-    expr = negate(expr);
+    //for (int depth = 0 ;; depth++) {
+    //    /* 
+    //     * expr is passed by reference, so it actually updates expr. saving
+    //     * expr to dist preserves it so we can compare later.
+    //     */
+    //    dist = expr;
+    //    distribute(expr, 0, depth);
+    //    if (expr == dist)
+    //        break;
+    //    expr.print_tree();
+    //}
+
+    distribute(expr, 0, 1);
     expr.print_tree();
 
     std::cout << expr.logical_str() << std::endl;
