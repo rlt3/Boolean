@@ -8,6 +8,7 @@
 #include <cstring>
 #include <ctype.h>
 #include <cerrno>
+#include <cassert>
 #include "Node.hpp"
 
 static std::stringstream INPUT;
@@ -29,7 +30,7 @@ int
 look_n (int count)
 {
     std::vector<int> read;
-    /* read all character read including whitespace */
+    /* save all characters read including whitespace */
     for (int i = 0; i < count; i++) {
         do {
             read.push_back(INPUT.get());
@@ -62,7 +63,7 @@ void
 match (char c)
 {
     if (look() != c) {
-        fprintf(stderr, "expected character '%c' got '%c'\n", c, look());
+        fprintf(stderr, "Expected character '%c' got '%c'\n", c, look());
         exit(1);
     }
     next();
@@ -128,10 +129,7 @@ negate ()
     match('(');
     N.add_reduction(expr());
     match(')');
-    if (N.children.size() + N.values.size() > 1) {
-        fprintf(stderr, "Negation produces node with >1 child\n");
-        exit(1);
-    }
+    assert(N.children.size() + N.values.size() == 1);
     return N;
 }
 
@@ -153,6 +151,7 @@ prod ()
         else
             unexpected(look());
 
+        /* a prod cannot begin with any of these */
         if (look() == '+' || look() == ')' || look() == EOF)
             break;
     }
@@ -169,12 +168,12 @@ expr ()
     /* use a sentinel value not in language to mark 'unset' */
     Node N('@');
 
-    while (look() != EOF) {
+    do {
         N.add_reduction(prod());
 
         /* 
-         * Anytime we find an disjunction ('+') then we make sure N has that
-         * type. Note that a disjunction can overwrite a conjunction but not
+         * Anytime we find an disjunction ('+') then we make sure N has type
+         * '+'. Note that a disjunction can overwrite a conjunction but not
          * vice-versa.
          */
         if (look() == '+') {
@@ -184,10 +183,10 @@ expr ()
             N.type = '*';
         }
 
-        /* these are the only two tokens that end an expr, sub, or negate */
+        /* these tokens end an expr or a sub expr */
         if (look() == EOF || look() == ')')
             break;
-    }
+    } while (look() != EOF);
 
     /* 
      * if we have an expression of a single child, e.g. a or (b) or ((c+d))
