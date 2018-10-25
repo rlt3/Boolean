@@ -183,7 +183,7 @@ children_has_type (Node &N, const char type)
 }
 
 void
-children_remove_type (Node &N, const char type)
+remove_children_of_type (Node &N, const char type)
 {
     for (auto it = N.children.begin(); it != N.children.end();) {
         if (it->type == type)
@@ -194,7 +194,7 @@ children_remove_type (Node &N, const char type)
 }
 
 void
-set_node_to_type (Node &N, const char type)
+reduce_to_type (Node &N, const char type)
 {
     N.values.clear();
     N.children.clear();
@@ -215,17 +215,22 @@ reduce (Node &parent)
 {
     /* a0bc => 0 */
     if (parent.type == '*' && children_has_type(parent, '0')) {
-        set_node_to_type(parent, '0');
+        reduce_to_type(parent, '0');
+    }
+
+    /* a1bc => abc */
+    if (parent.type == '*' && children_has_type(parent, '1')) {
+        remove_children_of_type(parent, '1');
     }
 
     /* a+0+b+c => a+b+c */
     if (parent.type == '+' && children_has_type(parent, '0')) {
-        children_remove_type(parent, '0');
+        remove_children_of_type(parent, '0');
     }
 
     /* a+1+b+c => 1 */
     if (parent.type == '+' && children_has_type(parent, '1')) {
-        set_node_to_type(parent, '1');
+        reduce_to_type(parent, '1');
     }
 
     /* 
@@ -239,9 +244,9 @@ reduce (Node &parent)
         if (!parent.values.count(negate_var(value)))
             continue;
         if (parent.type == '+')
-            set_node_to_type(parent, '1');
+            reduce_to_type(parent, '1');
         else
-            set_node_to_type(parent, '0');
+            reduce_to_type(parent, '0');
         break;
     }
 
