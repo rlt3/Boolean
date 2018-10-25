@@ -34,6 +34,12 @@ struct Node {
     }
 
     bool
+    operator!= (const Node &other) const
+    {
+        return !(*this == other);
+    }
+
+    bool
     operator== (const Node &other) const
     {
         if (this->type != other.type)

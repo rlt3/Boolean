@@ -219,6 +219,16 @@ negate_var (std::string value)
 Node
 reduce (Node &parent)
 {
+    std::vector<Node> reduced_children;
+
+    if (parent.children.size() > 0) {
+        for (auto &child : parent.children)
+            reduced_children.push_back(reduce(child));
+        parent.children.clear();
+        for (auto &child : reduced_children)
+            parent.add_reduction(child);
+    }
+
     /* a0bc => 0 */
     if (parent.type == '*' && children_has_type(parent, '0')) {
         reduce_to_type(parent, '0');
@@ -262,7 +272,9 @@ reduce (Node &parent)
 int
 main (int argc, char **argv)
 {
-    Node expr, dist;
+    Node expr, orig;
+    int max_depth;
+    int depth;
 
     if (argc != 2)
         usage(argv[0]);
@@ -281,30 +293,24 @@ main (int argc, char **argv)
     printf("Reduced\n");
     expr.print_tree();
 
-    //int max_depth = expr.depth();
-    //for (int depth = 0; depth < max_depth; depth++) {
-    //    distribute(expr, 0, depth);
-    //    printf("Dist Depth %d\n", depth);
-    //    expr.print_tree();
-    //}
-
-    //for (int depth = 0 ;; depth++) {
-    //    /* 
-    //     * expr is passed by reference, so it actually updates expr. saving
-    //     * expr to dist preserves it so we can compare later.
-    //     */
-    //    dist = expr;
-    //    distribute(expr, 0, depth);
-    //    if (expr == dist)
-    //        break;
-    //    expr.print_tree();
-    //}
-
-    //distribute(expr, 0, 1);
-    //expr.print_tree();
+    depth = 0;
+    max_depth = expr.depth() + 1;
+    printf("%d < %d\n", depth, max_depth);
+    while (depth < max_depth) {
+        distribute(expr, 0, depth);
+        printf("Dist Depth %d\n", depth);
+        expr.print_tree();
+        orig = expr;
+        reduce(expr);
+        if (orig != expr) {
+            depth = 0;
+            max_depth = expr.depth() + 1;
+        } else {
+            depth++;
+        }
+    }
 
     std::cout << expr.logical_str() << std::endl;
-    //std::cout << expr.depth() << std::endl;
 
     return 0;
 }
