@@ -66,11 +66,17 @@ negate (Node &parent)
         * second negation.
         */
         if (child.type == '!') {
+            /* 
+             * assignment to parent here lets us not have to assign return of
+             * negate for the entire tree.
+             */
             if (child.children.size() == 1) {
-                return negate(child.children[0]);
+                parent = negate(child.children[0]);
+                return parent;
             } else {
                 child.type = '*';
-                return child;
+                parent = child;
+                return parent;
             }
         }
 
