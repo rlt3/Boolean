@@ -173,6 +173,81 @@ distribute (Node &parent, const int depth, const int start_depth)
     return parent;
 }
 
+bool
+children_has_type (Node &N, const char type)
+{
+    for (auto &child : N.children)
+        if (child.type == type)
+            return true;
+    return false;
+}
+
+void
+children_remove_type (Node &N, const char type)
+{
+    for (auto it = N.children.begin(); it != N.children.end();) {
+        if (it->type == type)
+            it = N.children.erase(it++);
+        else
+            it++;
+    }
+}
+
+void
+set_node_to_type (Node &N, const char type)
+{
+    N.values.clear();
+    N.children.clear();
+    N.type = type;
+}
+
+/* a => !a; !a => a */
+std::string
+negate_var (std::string value)
+{
+    if (value[0] == '!')
+        return std::string(1, value[1]);
+    return "!" + value;
+}
+
+Node
+reduce (Node &parent)
+{
+    /* a0bc => 0 */
+    if (parent.type == '*' && children_has_type(parent, '0')) {
+        set_node_to_type(parent, '0');
+    }
+
+    /* a+0+b+c => a+b+c */
+    if (parent.type == '+' && children_has_type(parent, '0')) {
+        children_remove_type(parent, '0');
+    }
+
+    /* a+1+b+c => 1 */
+    if (parent.type == '+' && children_has_type(parent, '1')) {
+        set_node_to_type(parent, '1');
+    }
+
+    /* 
+     * For some var in values, if the negated var is contained in values, then
+     * we reduce. If we are 'ORing' then node becomes '1', if 'ANDing' then
+     * node becomes '1'.
+     * a+!a+b+c => 1
+     * a!abc => 0
+     */
+    for (auto &value : parent.values) {
+        if (!parent.values.count(negate_var(value)))
+            continue;
+        if (parent.type == '+')
+            set_node_to_type(parent, '1');
+        else
+            set_node_to_type(parent, '0');
+        break;
+    }
+
+    return parent;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -188,7 +263,19 @@ main (int argc, char **argv)
 
     expr = parse_input();
     negate(expr);
+    printf("Negated\n");
     expr.print_tree();
+
+    reduce(expr);
+    printf("Reduced\n");
+    expr.print_tree();
+
+    //int max_depth = expr.depth();
+    //for (int depth = 0; depth < max_depth; depth++) {
+    //    distribute(expr, 0, depth);
+    //    printf("Dist Depth %d\n", depth);
+    //    expr.print_tree();
+    //}
 
     //for (int depth = 0 ;; depth++) {
     //    /* 
@@ -202,10 +289,11 @@ main (int argc, char **argv)
     //    expr.print_tree();
     //}
 
-    distribute(expr, 0, 1);
-    expr.print_tree();
+    //distribute(expr, 0, 1);
+    //expr.print_tree();
 
     std::cout << expr.logical_str() << std::endl;
+    //std::cout << expr.depth() << std::endl;
 
     return 0;
 }

@@ -18,6 +18,21 @@ struct Node {
         : type(type)
     { }
 
+    int
+    max_depth (const int depth) const
+    {
+        int max = depth;
+        for (auto &child : this->children)
+            max = std::max(child.max_depth(depth + 1), depth);
+        return max;
+    }
+
+    int
+    depth () const
+    {
+        return max_depth(0);
+    }
+
     bool
     operator== (const Node &other) const
     {
@@ -105,6 +120,10 @@ struct Node {
     {
         std::string str;
         const Node &N = *this;
+
+        if (N.type == '0' || N.type == '1') {
+            return std::string(1, N.type);
+        }
 
         /* negation just adds the obvious expression negation */
         if (N.type == '!') {

@@ -78,14 +78,28 @@ Node expr ();
 bool
 is_var ()
 {
-    static const std::string syms = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01";
     if (look() == '!')
-        return (syms.find(look_n(1)) != std::string::npos);
-    return (syms.find(look()) != std::string::npos);
+        return isalpha(look_n(1));
+    return isalpha(look());
 }
 
 /*
- * var = !?[A-Za-z01]
+ * atom = [01]
+ */
+Node
+atom ()
+{
+    int c = look();
+    if (!(c == '0' || c == '1')) {
+        fprintf(stderr, "Expected atomic 0 or 1 instead got '%c'\n", c);
+        exit(1);
+    }
+    match(c);
+    return Node(c);
+}
+
+/*
+ * var = !?[A-Za-z]
  */
 std::string
 var ()
@@ -134,7 +148,7 @@ negate ()
 }
 
 /*
- * <prod> = <negate><prod> | <sub><prod> | <var><prod> | E
+ * <prod> = <negate><prod> | <sub><prod> | <var><prod> | <atom><prod> | E
  */
 Node
 prod ()
@@ -148,6 +162,8 @@ prod ()
             N.add_reduction(sub());
         else if (is_var())
             N.add_value(var());
+        else if (look() == '0' || look() == '1')
+            N.add_child(atom());
         else
             unexpected(look());
 
