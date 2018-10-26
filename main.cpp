@@ -158,11 +158,26 @@ distribute (Node &parent, const int depth, const int start_depth)
      */
     else {
         Node &child = parent.children[0];
-        for (auto &val : child.values) {
-            Node N = Node(parent.type);
-            N.values = parent.values;
-            N.add_value(val);
-            dist_children.push_back(N);
+        /* if that child has no values, we add parent values to its children */
+        if (child.values.size() == 0) {
+            for (auto &grandchild : child.children) {
+                for (auto &val : parent.values) {
+                    grandchild.add_value(val);
+                }
+            }
+            dist_children.push_back(child);
+        }
+        /*
+         * otherwise we create a new node with the parent's values and each
+         * value of the child. a(b+c) => (ab+ac)
+         */
+        else {
+            for (auto &val : child.values) {
+                Node N = Node(parent.type);
+                N.values = parent.values;
+                N.add_value(val);
+                dist_children.push_back(N);
+            }
         }
     }
 
@@ -175,6 +190,9 @@ distribute (Node &parent, const int depth, const int start_depth)
         case '*': parent.type = '+'; break;
     }
     parent.children = dist_children;
+
+    if (parent.children.size() == 1 && parent.values.size() == 0)
+        parent = parent.children[0];
 
     return parent;
 }
@@ -266,6 +284,9 @@ reduce (Node &parent)
         break;
     }
 
+    if (parent.children.size() == 1 && parent.values.size() == 0)
+        parent = parent.children[0];
+
     return parent;
 }
 
@@ -295,7 +316,6 @@ main (int argc, char **argv)
 
     depth = 0;
     max_depth = expr.depth() + 1;
-    printf("%d < %d\n", depth, max_depth);
     while (depth < max_depth) {
         distribute(expr, 0, depth);
         printf("Dist Depth %d\n", depth);
