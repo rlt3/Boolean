@@ -160,6 +160,50 @@ struct Node {
 
         return str;
     }
+
+    std::string
+    string () const
+    {
+        std::string str;
+        const Node &N = *this;
+
+        if (N.type == '0' || N.type == '1') {
+            return std::string(1, N.type);
+        }
+
+        /* negation just adds the obvious expression negation */
+        if (N.type == '!') {
+            str += "!(";
+            if (N.children.size() == 1) {
+                str += N.children[0].string();
+            } else {
+                str += *N.values.begin();
+            }
+            str += ")";
+            return str;
+        }
+
+        for (auto &var : N.values) {
+            str += var;
+            /* always add the plus even at the end if there's children to print */
+            if (N.type == '+' && (N.children.size() > 0 || var != *std::prev(N.values.end())))
+                str += "||";
+            if (N.type == '*' && (N.children.size() > 0 || var != *std::prev(N.values.end())))
+                str += "&&";
+        }
+
+        for (unsigned i = 0; i < N.children.size(); i++) {
+            str += "(";
+            str += N.children[i].string();
+            str += ")";
+            if (N.type == '+' && i != N.children.size() - 1)
+                str += "||";
+            if (N.type == '*' && i != N.children.size() - 1)
+                str += "&&";
+        }
+
+        return str;
+    }
 };
 
 #endif

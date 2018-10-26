@@ -44,7 +44,8 @@ generate_test (bool verbose)
         }
         return false;
     } else if (verbose) {
-        printf("%s ok\n", input.c_str());
+        //printf("%s ok\n", input.c_str());
+        printf("%s ## %s\n", E.string().c_str(), input.c_str());
     }
 
     return true;

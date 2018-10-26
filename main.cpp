@@ -58,7 +58,7 @@ negate (Node &parent)
         goto recurse;
 
     if (parent.children.size() == 1) {
-        Node &child = parent.children[0];
+        Node child = parent.children[0];
 
         /* 
         * Since the negation of a negation is effectively canceling-out any
@@ -72,22 +72,20 @@ negate (Node &parent)
              */
             if (child.children.size() == 1) {
                 parent = negate(child.children[0]);
-                return parent;
             } else {
                 child.type = '*';
                 parent = child;
-                return parent;
             }
-        }
+        } else {
+            switch (child.type) {
+              case '+': child.type = '*'; break;
+              case '*': child.type = '+'; break;
+            }
 
-        switch (child.type) {
-          case '+': child.type = '*'; break;
-          case '*': child.type = '+'; break;
+            negate_children(child);
+            negate_values(child);
+            parent = child;
         }
-
-        negate_children(child);
-        negate_values(child);
-        parent = child;
     }
     /* there is no child to negate but there is a single child */
     else {
@@ -306,6 +304,7 @@ main (int argc, char **argv)
     set_input(std::string(argv[1]));
 
     expr = parse_input();
+    expr.print_tree();
     negate(expr);
     printf("Negated\n");
     expr.print_tree();
