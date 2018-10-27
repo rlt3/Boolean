@@ -183,12 +183,21 @@ struct Node {
             return str;
         }
 
+        if (N.values.size() > 0)
+            str += "(";
         for (auto &var : N.values) {
             str += var;
             /* always add the plus even at the end if there's children to print */
-            if (N.type == '+' && (N.children.size() > 0 || var != *std::prev(N.values.end())))
+            if (N.type == '+' && var != *std::prev(N.values.end()))
                 str += "||";
-            if (N.type == '*' && (N.children.size() > 0 || var != *std::prev(N.values.end())))
+            if (N.type == '*' && var != *std::prev(N.values.end()))
+                str += "&&";
+        }
+        if (N.values.size() > 0) {
+            str += ")";
+            if (N.type == '+' && N.children.size() > 0)
+                str += "||";
+            if (N.type == '*' && N.children.size() > 0)
                 str += "&&";
         }
 

@@ -112,6 +112,48 @@ recurse:
 }
 
 /*
+ * Distribute the given values over the node with the given operation.
+ */
+Node
+distribute_values (Node &parent, std::set<std::string> &values, const char op)
+{
+    /*
+     * Since we are distributing values *over* some operation, we create a
+     * new node that represents that operation for each child. That child
+     * is added as a child to that node.
+     *
+     * vals: [a],
+     *      node: b+c => ab+ac
+     *      node: b+cd+e(f+g) => ab+acd+ae(f+g)
+     *
+     * append values to values of each child of N
+     * append values to values of N itself
+     */
+    std::vector<Node> dist_children;
+
+    for (auto &val : parent.values) {
+        Node N = Node(op);
+        N.values = values;
+        N.add_value(val);
+        dist_children.push_back(N);
+    }
+
+    for (auto &child : parent.children) {
+        Node N = Node(op);
+        N.values = values;
+        N.add_child(child);
+        dist_children.push_back(N);
+    }
+
+    parent.values.clear();
+    parent.children.clear();
+    for (auto &child : dist_children)
+        parent.add_reduction(child);
+
+    return parent;
+}
+
+/*
  * This distributes nodes at a certain depth and only does a single
  * distribution of terms, i.e. it is not a recursive distributor. For example,
  * if `start_depth' is 0, then the root node of the tree given will be
@@ -136,61 +178,25 @@ distribute (Node &parent, const int depth, const int start_depth)
     if (parent.children.size() == 0 || parent.values.size() == 0)
         return parent;
 
-    /* Distribute multiple children so we can reduce to Nodes with one child */
+    /*
+     * If there is more than one child, the parent node stays intact and all
+     * children gain the distributed values separately.
+     */
     if (parent.children.size() > 1) {
-        /* 
-         * Since we are distributing values *over* some operation, we create a
-         * new node that represents that operation for each child. That child
-         * is added as a child to that node.
-         */
-        for (auto &child : parent.children) {
-            Node N = Node(parent.type);
-            N.values = parent.values;
-            N.add_child(child);
-            dist_children.push_back(N);
-        }
+        for (auto &child : parent.children)
+            distribute_values(child, parent.values, parent.type);
     }
-    /* 
-     * Distributing over a single child is the last operation before a node
-     * becomes 'undistributable' which is the goal of the algorithm.
+    /*
+     * For a single child, the parent becomes the new distributed child. This
+     * is where distributing can yield a different node type, e.g. a(b+c)
+     * yields a parent type '+' ab+ac.
      */
     else {
-        Node &child = parent.children[0];
-        /* if that child has no values, we add parent values to its children */
-        if (child.values.size() == 0) {
-            for (auto &grandchild : child.children) {
-                for (auto &val : parent.values) {
-                    grandchild.add_value(val);
-                }
-            }
-            dist_children.push_back(child);
-        }
-        /*
-         * otherwise we create a new node with the parent's values and each
-         * value of the child. a(b+c) => (ab+ac)
-         */
-        else {
-            for (auto &val : child.values) {
-                Node N = Node(parent.type);
-                N.values = parent.values;
-                N.add_value(val);
-                dist_children.push_back(N);
-            }
-        }
+        parent = distribute_values(parent.children[0], parent.values, parent.type);
     }
 
     /* parent has no values now because they have been distributed */
     parent.values.clear();
-
-    /* and parent gets a new type and the distribute children */
-    switch (parent.type) {
-        case '+': parent.type = '*'; break;
-        case '*': parent.type = '+'; break;
-    }
-    parent.children = dist_children;
-
-    if (parent.children.size() == 1 && parent.values.size() == 0)
-        parent = parent.children[0];
 
     return parent;
 }
@@ -292,8 +298,6 @@ int
 main (int argc, char **argv)
 {
     Node expr, orig;
-    int max_depth;
-    int depth;
 
     if (argc != 2)
         usage(argv[0]);
@@ -309,27 +313,45 @@ main (int argc, char **argv)
     printf("Negated\n");
     expr.print_tree();
 
-    reduce(expr);
-    printf("Reduced\n");
-    expr.print_tree();
+    /*
+     * (!b)||(!(((b)||((!s&&o)&&((a||h))))&&((y)||((!q&&c&&h&&q&&z)&&((e||z))&&((q||r))&&(!((h||n)))&&((!t||i))))))
+     * or
+     * !b+(!((b+(!so(a+h)))(y+(!qchqz(e+z)(q+r)(!(h+n))(!t+i)))))
+     * simplifies to:
+     * !b+!y
+     */
 
-    depth = 0;
-    max_depth = expr.depth() + 1;
-    while (depth < max_depth) {
-        distribute(expr, 0, depth);
-        printf("Dist Depth %d\n", depth);
-        expr.print_tree();
-        orig = expr;
-        reduce(expr);
-        if (orig != expr) {
-            depth = 0;
-            max_depth = expr.depth() + 1;
-        } else {
-            depth++;
-        }
-    }
+    //reduce(expr);
+    //printf("Reduced\n");
+    //expr.print_tree();
+
+    //std::set<std::string> vals;
+    //vals.insert("a");
+    //expr = distribute_values(expr, vals, '*');
+    //distribute(expr, 0, 0);
+    //printf("Dist\n");
+    //expr.print_tree();
+
+    //int max_depth;
+    //int depth;
+    //depth = 0;
+    //max_depth = expr.depth() + 1;
+    //while (depth < max_depth) {
+    //    distribute(expr, 0, depth);
+    //    printf("Dist Depth %d\n", depth);
+    //    expr.print_tree();
+    //    orig = expr;
+    //    expr = reduce(expr);
+    //    if (orig != expr) {
+    //        depth = 0;
+    //        max_depth = expr.depth() + 1;
+    //    } else {
+    //        depth++;
+    //    }
+    //}
 
     std::cout << expr.logical_str() << std::endl;
+    std::cout << expr.string() << std::endl;
 
     return 0;
 }
