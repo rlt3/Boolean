@@ -141,7 +141,7 @@ distribute_values (Node &parent, std::set<std::string> &values, const char op)
     for (auto &child : parent.children) {
         Node N = Node(op);
         N.values = values;
-        N.add_child(child);
+        N.add_reduction(child);
         dist_children.push_back(N);
     }
 
@@ -185,6 +185,8 @@ distribute (Node &parent, const int depth, const int start_depth)
     if (parent.children.size() > 1) {
         for (auto &child : parent.children)
             distribute_values(child, parent.values, parent.type);
+        /* parent has no values now because they have been distributed */
+        parent.values.clear();
     }
     /*
      * For a single child, the parent becomes the new distributed child. This
@@ -194,9 +196,6 @@ distribute (Node &parent, const int depth, const int start_depth)
     else {
         parent = distribute_values(parent.children[0], parent.values, parent.type);
     }
-
-    /* parent has no values now because they have been distributed */
-    parent.values.clear();
 
     return parent;
 }
@@ -309,46 +308,49 @@ main (int argc, char **argv)
 
     expr = parse_input();
     expr.print_tree();
+
     negate(expr);
     printf("Negated\n");
     expr.print_tree();
 
+    reduce(expr);
+    printf("Reduced\n");
+    expr.print_tree();
+
     /*
+     * (!b)&&((d||m||q)||((!t&&d))||((!a&&!p&&c&&q)&&(m||!l))||((r&&v)&&((a||v))))
+     * !b(d+m+q+(!td)+(!a!pcq(m+!l))+(rv(a+v)))
+     * => (!bd)+(!bm)+(!bq)+(!brv)
+     *
      * (!b)||(!(((b)||((!s&&o)&&((a||h))))&&((y)||((!q&&c&&h&&q&&z)&&((e||z))&&((q||r))&&(!((h||n)))&&((!t||i))))))
-     * or
      * !b+(!((b+(!so(a+h)))(y+(!qchqz(e+z)(q+r)(!(h+n))(!t+i)))))
-     * simplifies to:
-     * !b+!y
+     * => !b+!y
+     *
+     * At first I didn't recurse all the way down the tree to distribute because
+     * it would be an infinite recursion. Now, I have methods to stop that recursion
+     * because we only distribute when they are children to distribute with.
+     * The two expression above represent the flaw with the current method of
+     * distribution which doesn't work really at all.
+     * Negate the expression, distribute all terms to their depth then reduce.
      */
 
-    //reduce(expr);
-    //printf("Reduced\n");
-    //expr.print_tree();
-
-    //std::set<std::string> vals;
-    //vals.insert("a");
-    //expr = distribute_values(expr, vals, '*');
-    //distribute(expr, 0, 0);
-    //printf("Dist\n");
-    //expr.print_tree();
-
-    //int max_depth;
-    //int depth;
-    //depth = 0;
-    //max_depth = expr.depth() + 1;
-    //while (depth < max_depth) {
-    //    distribute(expr, 0, depth);
-    //    printf("Dist Depth %d\n", depth);
-    //    expr.print_tree();
-    //    orig = expr;
-    //    expr = reduce(expr);
-    //    if (orig != expr) {
-    //        depth = 0;
-    //        max_depth = expr.depth() + 1;
-    //    } else {
-    //        depth++;
-    //    }
-    //}
+    int max_depth;
+    int depth;
+    depth = 0;
+    max_depth = expr.depth() + 1;
+    while (depth < max_depth) {
+        distribute(expr, 0, depth);
+        printf("Dist Depth %d\n", depth);
+        expr.print_tree();
+        orig = expr;
+        expr = reduce(expr);
+        if (orig != expr) {
+            depth = 0;
+            max_depth = expr.depth() + 1;
+        } else {
+            depth++;
+        }
+    }
 
     std::cout << expr.logical_str() << std::endl;
     std::cout << expr.string() << std::endl;

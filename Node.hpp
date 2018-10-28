@@ -69,13 +69,13 @@ struct Node {
             this->add_child(child);
         } else if (child.type == this->type) {
             for (auto &grandchild : child.children)
-                this->add_child(grandchild);
+                this->add_reduction(grandchild);
             for (auto &val : child.values)
                 this->add_value(val);
         } else if (child.children.size() == 0 && child.values.size() == 1) {
             this->add_value(*child.values.begin());
         } else if (child.children.size() == 1 && child.values.size() == 0) {
-            this->add_child(child.children[0]);
+            this->add_reduction(child.children[0]);
         } else {
             this->add_child(child);
         }
