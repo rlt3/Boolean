@@ -6,31 +6,69 @@
 #include <set>
 
 struct Node {
-    char type;
-    std::set<std::string> values;
-    std::vector<Node> children;
+    std::string type;
+    std::set<Node> children;
 
     Node () 
-        : type('+')
+        : type("+")
     { }
 
-    Node (char type) 
+    Node (const char c)
+        : type(std::string(1, c))
+    { }
+
+    Node (std::string type) 
         : type(type)
     { }
 
-    int
-    max_depth (const int depth) const
+    bool
+    contains (const std::string type) const
     {
-        int max = depth;
+        if (this->type == type)
+            return true;
         for (auto &child : this->children)
-            max = std::max(child.max_depth(depth + 1), depth);
-        return max;
+            if (child.type == type)
+                return true;
+        for (auto &child : this->children)
+            if (child.contains(type))
+                return true;
+        return false;
     }
 
-    int
-    depth () const
+    bool
+    is_cnf () const
     {
-        return max_depth(0);
+        for (auto &child : this->children)
+            if (child.contains("*"))
+                return false;
+        return true;
+    }
+
+    bool
+    is_dnf () const
+    {
+        for (auto &child : this->children)
+            if (child.contains("+"))
+                return false;
+        return true;
+    }
+
+
+    bool
+    is_operator () const
+    {
+        return (type == "+" || type == "*" || type == "!");
+    }
+
+    /*
+     * Do a string comparison of each tree's logical string for sets so that
+     * ordering will always be deterministic between sets of similar but not
+     * equal nodes.
+     */
+    bool
+    operator< (const Node &other) const
+    {
+        return this->logical_str() < other.logical_str();
     }
 
     bool
@@ -42,16 +80,7 @@ struct Node {
     bool
     operator== (const Node &other) const
     {
-        if (this->type != other.type)
-            return false;
-        if (this->values != other.values)
-            return false;
-        if (this->children.size() != other.children.size())
-            return false;
-        for (unsigned i = 0; i < this->children.size(); i++)
-            if (!(this->children[i] == other.children[i]))
-                return false;
-        return true;
+        return this->logical_str() == other.logical_str();
     }
 
     /* 
@@ -65,17 +94,13 @@ struct Node {
     void
     add_reduction (Node child)
     {
-        if (child.type == '!') {
+        if (!child.is_operator() || child.type == "!") {
             this->add_child(child);
         } else if (child.type == this->type) {
             for (auto &grandchild : child.children)
                 this->add_reduction(grandchild);
-            for (auto &val : child.values)
-                this->add_value(val);
-        } else if (child.children.size() == 0 && child.values.size() == 1) {
-            this->add_value(*child.values.begin());
-        } else if (child.children.size() == 1 && child.values.size() == 0) {
-            this->add_reduction(child.children[0]);
+        } else if (child.children.size() == 1) {
+            this->add_reduction(*child.children.begin());
         } else {
             this->add_child(child);
         }
@@ -84,13 +109,7 @@ struct Node {
     void
     add_child (Node child)
     {
-        this->children.push_back(child);
-    }
-
-    void
-    add_value (std::string value)
-    {
-        this->values.insert(value);
+        this->children.insert(child);
     }
 
     void
@@ -101,24 +120,16 @@ struct Node {
 
         for (int i = 0; i < tab; i++)
             printf("   ");
-        printf("%c\n", N.type);
+
+        printf("%s\n", N.type.c_str());
+
         tab++;
-
-        for (auto c : N.values) {
-            for (int i = 0; i < tab; i++)
-                printf("   ");
-            printf("%s\n", c.c_str());
-        }
-
-        for (auto c : N.children) {
+        for (auto c : N.children)
             c.print_tree();
-            tab--;
-        }
+        tab--;
 
-        if (tab == 1) {
-            tab = 0;
+        if (tab == 0)
             printf("-------------------------------\n");
-        }
     }
 
     std::string
@@ -127,88 +138,23 @@ struct Node {
         std::string str;
         const Node &N = *this;
 
-        if (N.type == '0' || N.type == '1') {
-            return std::string(1, N.type);
+        if (!this->is_operator()) {
+            return N.type;
         }
 
         /* negation just adds the obvious expression negation */
-        if (N.type == '!') {
-            str += "!(";
-            if (N.children.size() == 1) {
-                str += N.children[0].logical_str();
-            } else {
-                str += *N.values.begin();
-            }
-            str += ")";
-            return str;
+        if (N.type == "!") {
+            return str + "!(" + N.children.begin()->logical_str() + ")";
         }
 
-        for (auto &var : N.values) {
-            str += var;
-            /* always add the plus even at the end if there's children to print */
-            if (N.type == '+' && (N.children.size() > 0 || var != *std::prev(N.values.end())))
+        for (auto &child : N.children) {
+            if (child.is_operator())
+                str += "(";
+            str += child.logical_str();
+            if (child.is_operator())
+                str += ")";
+            if (N.type == "+" && child != *std::prev(N.children.end()))
                 str += N.type;
-        }
-
-        for (unsigned i = 0; i < N.children.size(); i++) {
-            str += "(";
-            str += N.children[i].logical_str();
-            str += ")";
-            if (N.type == '+' && i != N.children.size() - 1)
-                str += N.type;
-        }
-
-        return str;
-    }
-
-    std::string
-    string () const
-    {
-        std::string str;
-        const Node &N = *this;
-
-        if (N.type == '0' || N.type == '1') {
-            return std::string(1, N.type);
-        }
-
-        /* negation just adds the obvious expression negation */
-        if (N.type == '!') {
-            str += "!(";
-            if (N.children.size() == 1) {
-                str += N.children[0].string();
-            } else {
-                str += *N.values.begin();
-            }
-            str += ")";
-            return str;
-        }
-
-        if (N.values.size() > 0)
-            str += "(";
-        for (auto &var : N.values) {
-            str += var;
-            /* always add the plus even at the end if there's children to print */
-            if (N.type == '+' && var != *std::prev(N.values.end()))
-                str += "||";
-            if (N.type == '*' && var != *std::prev(N.values.end()))
-                str += "&&";
-        }
-        if (N.values.size() > 0) {
-            str += ")";
-            if (N.type == '+' && N.children.size() > 0)
-                str += "||";
-            if (N.type == '*' && N.children.size() > 0)
-                str += "&&";
-        }
-
-        for (unsigned i = 0; i < N.children.size(); i++) {
-            str += "(";
-            str += N.children[i].string();
-            str += ")";
-            if (N.type == '+' && i != N.children.size() - 1)
-                str += "||";
-            if (N.type == '*' && i != N.children.size() - 1)
-                str += "&&";
         }
 
         return str;

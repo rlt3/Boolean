@@ -69,7 +69,7 @@ match (char c)
     next();
 }
 
-std::string var ();
+Node var ();
 Node sub ();
 Node negate ();
 Node prod ();
@@ -101,7 +101,7 @@ atom ()
 /*
  * var = !?[A-Za-z]
  */
-std::string
+Node
 var ()
 {
     std::string v;
@@ -117,7 +117,7 @@ var ()
     v += look();
     match(look());
 
-    return v;
+    return Node(v);
 }
 
 /*
@@ -143,7 +143,7 @@ negate ()
     match('(');
     N.add_reduction(expr());
     match(')');
-    assert(N.children.size() + N.values.size() == 1);
+    assert(N.children.size() == 1);
     return N;
 }
 
@@ -161,7 +161,7 @@ prod ()
         else if (look() == '(')
             N.add_reduction(sub());
         else if (is_var())
-            N.add_value(var());
+            N.add_child(var());
         else if (look() == '0' || look() == '1')
             N.add_child(atom());
         else
@@ -182,7 +182,7 @@ Node
 expr ()
 {
     /* use a sentinel value not in language to mark 'unset' */
-    Node N('@');
+    Node N("@");
 
     do {
         N.add_reduction(prod());
@@ -195,7 +195,7 @@ expr ()
         if (look() == '+') {
             N.type = '+';
             match('+');
-        } else if (N.type == '@') {
+        } else if (N.type == "@") {
             N.type = '*';
         }
 
@@ -208,8 +208,8 @@ expr ()
      * if we have an expression of a single child, e.g. a or (b) or ((c+d))
      * then make that child the root and return it
      */
-    if (N.children.size() == 1 && N.values.size() == 0)
-        N = N.children[0];
+    if (N.children.size() == 1)
+        N = *N.children.begin();
 
     return N;
 }
