@@ -10,11 +10,9 @@ usage (char *prog)
 }
 
 /*
- * The cummulative Node is Z. The current node we are appending to is Y.
- * The idea of this is to have a for-loop over each grandchild where the number
- * of children is unknown. So, we Y accumulates one grandchild of each child
- * at a time until there are no more children left to add. If there are no more
- * children then Y is added to Z.
+ * We append values of the child at the iterator to Y. If there is no next
+ * child (the iterator is at the end), then we can append Y to Z and start with
+ * a new Y.
  */
 void
 distribute_node (Node &Z,
@@ -52,36 +50,66 @@ distribute_node (Node &Z,
     }
 }
 
+Node distribute_children (Node tree, char parent, char clause);
+
+/*
+ * Call the `distribute_children' for each child of the given tree and reassign
+ * the tree's children to the set of distributed children.
+ */
+Node&
+map_children (Node &tree, char parent, char clause)
+{
+    std::set<Node> new_children;
+    for (auto &child : tree.children)
+        new_children.insert(distribute_children(child, parent, clause));
+    tree.children.clear();
+    for (auto &child : new_children)
+        tree.add_reduction(child);
+    return tree;
+}
+
+/*
+ * We setup Z and Y so they can be used as references.  Z is the cummulative
+ * Node where all different values of Y are inserted into. Y is used as an
+ * intermediate node that has all the values of each child of the tree
+ * iteratively appended to it.
+ *
+ * This is effectively an algorithm that creates, through the use of recursive
+ * function calls, an N-deep 'for loop' for the children of the given tree.
+ * Imagine the tree for 'ab+cd+ef', there would be 3 for loops. The string would
+ * be a+c+e, then a+c+f, then a+d+e, etc. just like a for-loop works.
+ *
+ */
 Node
-distribute_children (char parent, char clause, Node tree)
+distribute_children (Node tree, char parent, char clause)
 {
     Node Z(parent);
     Node Y(clause);
-    distribute_node(Z, Y, tree.children.begin(), tree.children.end());
 
-    if ((parent == '+' && !Z.is_dnf()) ||
-        (parent == '*' && !Z.is_cnf())) {
-        std::set<Node> new_children;
-        for (auto &child : Z.children)
-            new_children.insert(distribute_children(parent, clause, child));
-        Z.children.clear();
-        for (auto &child : new_children)
-            Z.add_reduction(child);
-    }
+    if (tree.children.size() == 0)
+        return tree;
+
+    distribute_node(Z, Y, tree.children.begin(), tree.children.end());
+    if ((parent == '+' && !Z.is_dnf()) || (parent == '*' && !Z.is_cnf()))
+        map_children(Z, parent, clause);
 
     return Z;
 }
 
 Node
-to_cnf (Node tree)
+to_cnf (Node &tree)
 {
-    return distribute_children('*', '+', tree);
+    if (tree.type == "*")
+        return map_children(tree, '*', '+');
+    return distribute_children(tree, '*', '+');
 }
 
 Node
-to_dnf (Node tree)
+to_dnf (Node &tree)
 {
-    return distribute_children('+', '*', tree);
+    if (tree.type == "+")
+        return map_children(tree, '+', '*');
+    return distribute_children(tree, '+', '*');
 }
 
 int

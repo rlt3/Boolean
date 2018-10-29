@@ -209,7 +209,7 @@ expr ()
      * then make that child the root and return it
      */
     if (N.children.size() == 1)
-        N = *N.children.begin();
+        return *N.children.begin();
 
     return N;
 }

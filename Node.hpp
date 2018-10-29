@@ -21,6 +21,28 @@ struct Node {
         : type(type)
     { }
 
+    Node (const Node &other) 
+        : type(other.type)
+        , children(other.children)
+    { }
+
+    std::set<std::string>
+    values () const
+    {
+        std::set<std::string> S;
+
+        for (auto &child : this->children) {
+            if (!child.is_operator()) {
+                S.insert(child.type);
+            } else {
+                std::set<std::string> vals = child.values();
+                for (auto &v : vals)
+                    S.insert(v);
+            }
+        }
+        return S;
+    }
+
     bool
     contains (const std::string type) const
     {
@@ -58,6 +80,16 @@ struct Node {
     is_operator () const
     {
         return (type == "+" || type == "*" || type == "!");
+    }
+
+    Node&
+    operator= (const Node &other)
+    {
+        this->type = other.type;
+        this->children = other.children;
+        //std::swap(type, other.type);
+        //std::swap(children, other.children);
+        return *this;
     }
 
     /*
