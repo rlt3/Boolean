@@ -8,8 +8,7 @@
 #include <algorithm>
 
 Node rand_node (int &stop_chance, std::mt19937_64 &rng);
-std::string add_var (std::mt19937_64 &rng);
-std::string add_var (std::mt19937_64 &rng);
+Node add_var (std::mt19937_64 &rng);
 Node add_sub (int &stop_chance, std::mt19937_64 &rng);
 Node add_negation (int &stop_chance, std::mt19937_64 &rng);
 
@@ -44,14 +43,13 @@ generate_test (bool verbose)
         }
         return false;
     } else if (verbose) {
-        //printf("%s ok\n", input.c_str());
-        printf("%s ## %s\n", E.string().c_str(), input.c_str());
+        printf("%s ok\n", input.c_str());
     }
 
     return true;
 }
 
-std::string
+Node
 add_var (std::mt19937_64 &rng)
 {
     static std::uniform_int_distribution<int> negated_choice(0, 100);
@@ -63,7 +61,7 @@ add_var (std::mt19937_64 &rng)
         var += '!';
 
     var += static_cast<char>(char_choice(rng));
-    return var;
+    return Node(var);
 
 }
 
@@ -133,7 +131,7 @@ rand_node (int &stop_chance, std::mt19937_64 &rng)
 
         switch (choice) {
             case 'v': 
-                N.add_value(add_var(rng));
+                N.add_child(add_var(rng));
                 break;
             case 's':
                 N.add_reduction(add_sub(stop_chance, rng));
@@ -145,8 +143,8 @@ rand_node (int &stop_chance, std::mt19937_64 &rng)
     }
 
     /* A node must have at least two operands */
-    while (N.children.size() + N.values.size() < 2)
-        N.add_value(add_var(rng));
+    while (N.children.size() < 2)
+        N.add_child(add_var(rng));
     return N;
 }
 

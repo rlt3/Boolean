@@ -87,8 +87,6 @@ struct Node {
     {
         this->type = other.type;
         this->children = other.children;
-        //std::swap(type, other.type);
-        //std::swap(children, other.children);
         return *this;
     }
 
@@ -96,11 +94,47 @@ struct Node {
      * Do a string comparison of each tree's logical string for sets so that
      * ordering will always be deterministic between sets of similar but not
      * equal nodes.
+     * This sorts variables by their value first and then by their negation
+     * second.
      */
     bool
     operator< (const Node &other) const
     {
-        return this->logical_str() < other.logical_str();
+        bool a_negated, b_negated;
+        std::string A = this->logical_str();
+        std::string B = other.logical_str();
+
+        /* Put variables before compound expressions */
+        if (!this->is_operator() && other.is_operator())
+            return true;
+        if (this->is_operator() && !other.is_operator())
+            return false;
+        /* If two compound expressions, the smaller ones go first */
+        if (this->is_operator() && other.is_operator())
+            return A < B;
+
+        a_negated = b_negated = false;
+
+        if (A[0] == '!') {
+            a_negated = true;
+            A = std::string(1, A[1]);
+        }
+        if (B[0] == '!') {
+            b_negated = true;
+            B = std::string(1, B[1]);
+        }
+
+        /* If equal, negation is ordered first */
+        if (A == B && a_negated && !b_negated)
+            return true;
+        if (A == B && !a_negated && b_negated)
+            return false;
+        /* this makes sure equal variables are considered equal */
+        if (A == B && a_negated && b_negated)
+            return false;
+
+        /* in all other cases sort by variable name */
+        return A < B;
     }
 
     bool
