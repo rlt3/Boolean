@@ -69,26 +69,6 @@ map_children (Node &tree, char parent, char clause)
 }
 
 /*
- * Return whether sub is a subset of tree. This is a naive search which
- * basically returns true if sub matches tree one-for-one and then sub runs out
- * of nodes.
- *
- * We can use this to do the filtering of redundant sets. First, we gather the
- * Nodes which are the minimum nodes (seen below). That set is also the set of
- * subs (as in subset matcher) when then are used to further remove redundant
- * sets of expressions.
- *
- * This will require explicit sorting of nodes since this is going to be a
- * one-for-one matcher and not a general, does-this-node-contain-at-any-point
- * some value.
- */
-bool
-subset_match (Node &tree, Node &sub)
-{
-    return false;
-}
-
-/*
  * We setup Z and Y so they can be used as references.  Z is the cummulative
  * Node where all different values of Y are inserted into. Y is used as an
  * intermediate node that has all the values of each child of the tree
@@ -103,7 +83,8 @@ subset_match (Node &tree, Node &sub)
 Node
 distribute_children (Node tree, char parent, char clause)
 {
-    std::set<Node> filter;
+    std::set<Node> subsets;
+    std::set<Node> children;
     Node Z(parent);
     Node Y(clause);
 
@@ -112,18 +93,52 @@ distribute_children (Node tree, char parent, char clause)
 
     distribute_node(Z, Y, tree.children.begin(), tree.children.end());
 
-    //int min_set = -1;
-    //for (auto &child : Z.children) {
-    //    int size = child.values().size();
-    //    if (min_set == -1 || size < min_set) {
-    //        min_set = size;
-    //        filter.clear();
-    //    }
-    //    if (size == min_set) {
-    //        filter.insert(child);
-    //    }
-    //}
-    //Z.children = filter;
+    /*
+     * Find the minimum sets of the distributed children. In other words, find
+     * the sets with the least number of members.
+     */
+    int min_set = -1;
+    for (auto &child : Z.children) {
+        int size = child.children.size();
+        if (min_set == -1 || size < min_set) {
+            min_set = size;
+            subsets.clear();
+        }
+        if (size == min_set) {
+            subsets.insert(child);
+        }
+    }
+
+    /*
+     * If the number of the subsets doesn't equal to the number of children 
+     * then there must be some redundancy that can be filtered out. 
+     */
+    if (subsets.size() != Z.children.size()) {
+        children = Z.children;
+        Z.children.clear();
+        
+        /*
+         * If child is equal to any one of the subsets, add it to Z.
+         * If child contains but isn't equal to any one of the subsets, then
+         * filter it out.
+         * Otherwise add it.
+         */
+        for (auto &child : children) {
+            bool contains = false;
+            for (auto &set : subsets) {
+                if (child == set) {
+                    Z.children.insert(child);
+                    break;
+                }
+                if (child.children.count(set)) {
+                    contains = true;
+                    break;
+                }
+            }
+            if (!contains)
+                Z.children.insert(child);
+        }
+    }
 
     if ((parent == '+' && !Z.is_dnf()) || (parent == '*' && !Z.is_cnf()))
         map_children(Z, parent, clause);
@@ -163,13 +178,13 @@ main (int argc, char **argv)
     expr = parse_input();
     expr.print_tree();
 
-    //if (!expr.is_cnf())
-    //    expr = to_cnf(expr);
-    //else if (!expr.is_dnf())
-    //    expr = to_dnf(expr);
+    if (!expr.is_cnf())
+        expr = to_cnf(expr);
+    else if (!expr.is_dnf())
+        expr = to_dnf(expr);
 
-    //if (!expr.is_cnf())
-    //    expr = to_cnf(expr);
+    if (!expr.is_cnf())
+        expr = to_cnf(expr);
 
     expr.print_tree();
     std::cout << expr.logical_str() << std::endl;
