@@ -50,24 +50,6 @@ distribute_node (Node &Z,
     }
 }
 
-Node distribute_children (Node tree, char parent, char clause);
-
-/*
- * Call the `distribute_children' for each child of the given tree and reassign
- * the tree's children to the set of distributed children.
- */
-Node&
-map_children (Node &tree, char parent, char clause)
-{
-    std::set<Node> new_children;
-    for (auto &child : tree.children)
-        new_children.insert(distribute_children(child, parent, clause));
-    tree.children.clear();
-    for (auto &child : new_children)
-        tree.add_reduction(child);
-    return tree;
-}
-
 /*
  * For any child of N, if that child C can contain another child S then C is
  * redundant and should be filtered. We use this filtering process to find the
@@ -134,7 +116,13 @@ minimum_sets (Node &N)
     }
 }
 
+Node to_cnf (Node &tree);
+Node to_dnf (Node &tree);
+
 /*
+ * This converts the entire expression tree to CNF form from the leaves up to
+ * the root node.
+ *
  * We setup Z and Y so they can be used as references.  Z is the cummulative
  * Node where all different values of Y are inserted into. Y is used as an
  * intermediate node that has all the values of each child of the tree
@@ -147,38 +135,52 @@ minimum_sets (Node &N)
  *
  */
 Node
-distribute_children (Node tree, char parent, char clause)
+conversion_dfs (Node tree, char expr_type, char clause_type)
 {
-    Node Z(parent);
-    Node Y(clause);
+    std::set<Node> new_children;
+    Node Z(expr_type);
+    Node Y(clause_type);
+    int good_form = false;
 
     if (tree.children.size() == 0)
         return tree;
 
-    distribute_node(Z, Y, tree.children.begin(), tree.children.end());
+    for (auto &child : tree.children)
+        new_children.insert(conversion_dfs(child, expr_type, clause_type));
+    tree.children.clear();
+    for (auto &child : new_children)
+        tree.add_reduction(child);
 
-    minimum_sets(Z);
+    switch (expr_type) {
+        case '*': if (tree.is_cnf()) { good_form = true; } break;
+        case '+': if (tree.is_dnf()) { good_form = true; } break;
+    }
 
-    if ((parent == '+' && !Z.is_dnf()) || (parent == '*' && !Z.is_cnf()))
-        map_children(Z, parent, clause);
-
-    return Z;
+    if (good_form) {
+        /*
+         * TODO:
+         * Could be 'minimize sets' which converts it to the opposite form,
+         * does reductions, and other things.
+         */
+        minimum_sets(tree);
+        return tree;
+    } else {
+        distribute_node(Z, Y, tree.children.begin(), tree.children.end());
+        minimum_sets(Z);
+        return Z;
+    }
 }
 
 Node
 to_cnf (Node &tree)
 {
-    if (tree.type == "*")
-        return map_children(tree, '*', '+');
-    return distribute_children(tree, '*', '+');
+    return conversion_dfs(tree, '*', '+');
 }
 
 Node
 to_dnf (Node &tree)
 {
-    if (tree.type == "+")
-        return map_children(tree, '+', '*');
-    return distribute_children(tree, '+', '*');
+    return conversion_dfs(tree, '+', '*');
 }
 
 int
@@ -197,16 +199,7 @@ main (int argc, char **argv)
     expr = parse_input();
     expr.print_tree();
 
-    while (1) {
-        orig = expr;
-        if (expr.is_cnf()) {
-            minimum_sets(expr);
-        } else {
-            expr = to_cnf(expr);
-        }
-        if (expr == orig)
-            break;
-    }
+    expr = to_cnf(expr);
 
     expr.print_tree();
     std::cout << expr.logical_str() << std::endl;
