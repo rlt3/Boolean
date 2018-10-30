@@ -8,6 +8,7 @@
 struct Node {
     std::string type;
     std::set<Node> children;
+    std::string logical;
 
     Node () 
         : type("+")
@@ -15,15 +16,20 @@ struct Node {
 
     Node (const char c)
         : type(std::string(1, c))
-    { }
+    {
+        this->logical = this->logical_str();
+    }
 
     Node (std::string type) 
         : type(type)
-    { }
+    {
+        this->logical = this->logical_str();
+    }
 
     Node (const Node &other) 
         : type(other.type)
         , children(other.children)
+        , logical(other.logical)
     { }
 
     std::set<std::string>
@@ -87,6 +93,7 @@ struct Node {
     {
         this->type = other.type;
         this->children = other.children;
+        this->logical = other.logical;
         return *this;
     }
 
@@ -101,8 +108,8 @@ struct Node {
     operator< (const Node &other) const
     {
         bool a_negated, b_negated;
-        std::string A = this->logical_str();
-        std::string B = other.logical_str();
+        std::string A = this->logical;
+        std::string B = other.logical;
 
         /* Put variables before compound expressions */
         if (!this->is_operator() && other.is_operator())
@@ -146,7 +153,7 @@ struct Node {
     bool
     operator== (const Node &other) const
     {
-        return this->logical_str() == other.logical_str();
+        return this->logical == other.logical;
     }
 
     /* 
@@ -176,6 +183,7 @@ struct Node {
     add_child (Node child)
     {
         this->children.insert(child);
+        this->logical = this->logical_str();
     }
 
     void
@@ -222,7 +230,7 @@ struct Node {
         for (auto &child : N.children) {
             if (child.is_operator())
                 str += "(";
-            str += child.logical_str(prod);
+            str += child.logical_str(print_prod);
             if (child.is_operator())
                 str += ")";
             if (N.type == "+" && child != *std::prev(N.children.end()))

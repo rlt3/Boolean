@@ -199,15 +199,11 @@ main (int argc, char **argv)
 
     while (1) {
         orig = expr;
-
-        if (!expr.is_cnf())
+        if (expr.is_cnf()) {
+            minimum_sets(expr);
+        } else {
             expr = to_cnf(expr);
-        else if (!expr.is_dnf())
-            expr = to_dnf(expr);
-
-        if (!expr.is_cnf())
-            expr = to_cnf(expr);
-
+        }
         if (expr == orig)
             break;
     }
