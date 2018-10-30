@@ -69,6 +69,43 @@ map_children (Node &tree, char parent, char clause)
 }
 
 /*
+ * For any child of N, if that child C can contain another child S then C is
+ * redundant and should be filtered. We use this filtering process to find the
+ * minimum sets.
+ */
+void
+minimum_sets (Node &N)
+{
+    std::set<Node> filtered;
+    std::set<Node> children;
+
+    children = N.children;
+
+    for (auto &child : children) {
+        for (auto &set : children) {
+            bool contains = true;
+            if (set == child)
+                continue;
+            for (auto &set_member : set.children) {
+                if (!child.children.count(set_member)) {
+                    contains = false;
+                    break;
+                }
+            }
+            if (contains)
+                filtered.insert(child);
+        }
+    }
+
+    /* add all non-filtered children to N */
+    N.children.clear();
+    for (auto &child : children) {
+        if (!filtered.count(child))
+            N.children.insert(child);
+    }
+}
+
+/*
  * We setup Z and Y so they can be used as references.  Z is the cummulative
  * Node where all different values of Y are inserted into. Y is used as an
  * intermediate node that has all the values of each child of the tree
@@ -83,8 +120,6 @@ map_children (Node &tree, char parent, char clause)
 Node
 distribute_children (Node tree, char parent, char clause)
 {
-    std::set<Node> subsets;
-    std::set<Node> children;
     Node Z(parent);
     Node Y(clause);
 
@@ -93,52 +128,7 @@ distribute_children (Node tree, char parent, char clause)
 
     distribute_node(Z, Y, tree.children.begin(), tree.children.end());
 
-    /*
-     * Find the minimum sets of the distributed children. In other words, find
-     * the sets with the least number of members.
-     */
-    int min_set = -1;
-    for (auto &child : Z.children) {
-        int size = child.children.size();
-        if (min_set == -1 || size < min_set) {
-            min_set = size;
-            subsets.clear();
-        }
-        if (size == min_set) {
-            subsets.insert(child);
-        }
-    }
-
-    /*
-     * If the number of the subsets doesn't equal to the number of children 
-     * then there must be some redundancy that can be filtered out. 
-     */
-    if (subsets.size() != Z.children.size()) {
-        children = Z.children;
-        Z.children.clear();
-        
-        /*
-         * If child is equal to any one of the subsets, add it to Z.
-         * If child contains but isn't equal to any one of the subsets, then
-         * filter it out.
-         * Otherwise add it.
-         */
-        for (auto &child : children) {
-            bool contains = false;
-            for (auto &set : subsets) {
-                if (child == set) {
-                    Z.children.insert(child);
-                    break;
-                }
-                if (child.children.count(set)) {
-                    contains = true;
-                    break;
-                }
-            }
-            if (!contains)
-                Z.children.insert(child);
-        }
-    }
+    minimum_sets(Z);
 
     if ((parent == '+' && !Z.is_dnf()) || (parent == '*' && !Z.is_cnf()))
         map_children(Z, parent, clause);
