@@ -201,6 +201,12 @@ struct Node {
     std::string
     logical_str () const
     {
+        return logical_str(false);
+    }
+
+    std::string
+    logical_str (const bool print_prod) const
+    {
         std::string str;
         const Node &N = *this;
 
@@ -210,16 +216,18 @@ struct Node {
 
         /* negation just adds the obvious expression negation */
         if (N.type == "!") {
-            return str + "!(" + N.children.begin()->logical_str() + ")";
+            return str + "!(" + N.children.begin()->logical_str(print_prod) + ")";
         }
 
         for (auto &child : N.children) {
             if (child.is_operator())
                 str += "(";
-            str += child.logical_str();
+            str += child.logical_str(prod);
             if (child.is_operator())
                 str += ")";
             if (N.type == "+" && child != *std::prev(N.children.end()))
+                str += N.type;
+            if (print_prod && N.type == "*" && child != *std::prev(N.children.end()))
                 str += N.type;
         }
 

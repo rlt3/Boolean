@@ -86,10 +86,39 @@ minimum_sets (Node &N)
             bool contains = true;
             if (set == child)
                 continue;
-            for (auto &set_member : set.children) {
-                if (!child.children.count(set_member)) {
+            /* 
+             * if the child doesn't have any children but the set does, the
+             * child cannot contain that set.
+             */
+            if (child.children.size() == 0 && set.children.size() > 0) {
+                contains = false;
+            }
+            /*
+             * If the set has no children, then we test if child contains that
+             * set itself (because it must be a variable).
+             */
+            else if (child.children.size() > 0 && set.children.size() == 0) {
+                if (!child.children.count(set))
                     contains = false;
-                    break;
+            }
+            /*
+             * Neither set or child will be equal here (because of the guard
+             * above). Thus if they both have no children, they must be
+             * different.
+             */
+            else if (child.children.size() == 0 && set.children.size() == 0) {
+                contains = false;
+            }
+            /*
+             * Otherwise we test that child can hold each and every child of
+             * set.
+             */
+            else {
+                for (auto &set_member : set.children) {
+                    if (!child.children.count(set_member)) {
+                        contains = false;
+                        break;
+                    }
                 }
             }
             if (contains)
@@ -155,7 +184,7 @@ to_dnf (Node &tree)
 int
 main (int argc, char **argv)
 {
-    Node expr;
+    Node expr, orig;
 
     if (argc != 2)
         usage(argv[0]);
@@ -168,13 +197,20 @@ main (int argc, char **argv)
     expr = parse_input();
     expr.print_tree();
 
-    if (!expr.is_cnf())
-        expr = to_cnf(expr);
-    else if (!expr.is_dnf())
-        expr = to_dnf(expr);
+    while (1) {
+        orig = expr;
 
-    if (!expr.is_cnf())
-        expr = to_cnf(expr);
+        if (!expr.is_cnf())
+            expr = to_cnf(expr);
+        else if (!expr.is_dnf())
+            expr = to_dnf(expr);
+
+        if (!expr.is_cnf())
+            expr = to_cnf(expr);
+
+        if (expr == orig)
+            break;
+    }
 
     expr.print_tree();
     std::cout << expr.logical_str() << std::endl;

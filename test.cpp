@@ -43,7 +43,7 @@ generate_test (bool verbose)
         }
         return false;
     } else if (verbose) {
-        printf("%s ok\n", input.c_str());
+        printf("%s # %s ok\n", input.c_str(), E.logical_str(true).c_str());
     }
 
     return true;
@@ -137,7 +137,8 @@ rand_node (int &stop_chance, std::mt19937_64 &rng)
                 N.add_reduction(add_sub(stop_chance, rng));
                 break;
             case '!':
-                N.add_child(add_negation(stop_chance, rng));
+                N.add_reduction(add_sub(stop_chance, rng));
+                //N.add_child(add_negation(stop_chance, rng));
                 break;
         }
     }
