@@ -81,20 +81,10 @@ struct Node {
         return true;
     }
 
-
     bool
     is_operator () const
     {
         return (type == "+" || type == "*" || type == "!");
-    }
-
-    Node&
-    operator= (const Node &other)
-    {
-        this->type = other.type;
-        this->children = other.children;
-        this->logical = other.logical;
-        return *this;
     }
 
     /*
@@ -183,7 +173,7 @@ struct Node {
     add_child (Node child)
     {
         this->children.insert(child);
-        this->logical = this->logical_str();
+        this->logical_str();
     }
 
     void
@@ -207,9 +197,10 @@ struct Node {
     }
 
     std::string
-    logical_str () const
+    logical_str ()
     {
-        return logical_str(false);
+        this->logical = logical_str(false);
+        return this->logical;
     }
 
     std::string
