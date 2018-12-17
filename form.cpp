@@ -320,8 +320,9 @@ main (int argc, char **argv)
 
     expr = parse_input();
     expr.print_tree();
+    std::cout << expr.logical_str() << std::endl;
 
-    expr = to_cnf(expr);
+    //expr = to_cnf(expr);
     //expr = to_dnf(expr);
 
     /*
@@ -335,8 +336,7 @@ main (int argc, char **argv)
      * dfkrs(c+v)(!n+w)
      */
 
-    expr.print_tree();
-    std::cout << expr.logical_str() << std::endl;
+    //expr.print_tree();
 
     return 0;
 }
