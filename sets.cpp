@@ -2,6 +2,7 @@
 #include <string>
 #include <set>
 #include <algorithm>
+#include <cassert>
 
 typedef enum NodeType {
     AND, OR, NOT, VAR, NVAR, TRUE, FALSE
@@ -121,6 +122,7 @@ public:
         this->children.insert(Node(var, false));
     }
 
+    /* negated var */
     void
     add_nvar (char var)
     {
@@ -134,7 +136,7 @@ public:
     }
 
     std::set<Node>
-    intersect (Node &other)
+    intersect (Node &other) const
     {
         std::set<Node> S;
         set_intersection(this->children.begin(), this->children.end(),
@@ -144,7 +146,7 @@ public:
     }
 
     bool
-    has_intersection (Node &other)
+    has_intersection (Node &other) const
     {
         return !(this->intersect(other).empty());
     }
@@ -158,51 +160,116 @@ public:
      * will be empty (or at least contain nodes unexpected).
      */
     bool
-    contains (Node &other)
+    has_subset (Node &other) const
     {
         return (std::includes(this->children.begin(), this->children.end(),
                               other.children.begin(), other.children.end()));
+    }
+
+    bool
+    contains_type (const NodeType type) const
+    {
+        if (this->type == type)
+            return true;
+        for (auto &child : this->children)
+            if (child.type == type)
+                return true;
+        for (auto &child : this->children)
+            if (child.contains_type(type))
+                return true;
+        return false;
+    }
+
+    bool
+    is_cnf () const
+    {
+        for (auto &child : this->children)
+            if (child.contains_type(AND))
+                return false;
+        return true;
+    }
+
+    bool
+    is_dnf () const
+    {
+        for (auto &child : this->children)
+            if (child.contains_type(OR))
+                return false;
+        return true;
+    }
+
+    /*
+     * Distribute the children of this Node over its operator.
+     */
+    Node
+    distribute ()
+    {
+        assert(this->is_operator());
+        return Node();
     }
 };
 
 int
 main ()
 {
-    Node Sub(AND);
-    Sub.add_var('x');
-    Sub.add_var('y');
+    Node Tree(OR);
 
-    Node SubSub(OR);
-    SubSub.add_var('w');
-    SubSub.add_var('z');
-    Sub.add_sub(SubSub);
+    Node L(AND);
+    L.add_var('a');
+    L.add_var('b');
 
-    Node A(OR);
-    A.add_var('a');
-    A.add_var('b');
-    A.add_sub(Sub);
+    Node R(AND);
+    R.add_var('x');
+    R.add_var('y');
 
-    Node B(OR);
-    B.add_var('d');
-    B.add_var('e');
-    B.add_sub(Sub);
+    Node RR(OR);
+    RR.add_var('w');
+    RR.add_var('z');
 
-    A.print();
-    B.print();
+    R.add_sub(RR);
+    Tree.add_var('c');
+    Tree.add_sub(R);
+    Tree.add_sub(L);
 
-    if (A.has_intersection(B)) {
-        printf("has intersection: ");
-        Node I;
-        I.children = A.intersect(B);
-        I.type = A.type;
-        I.print();
-    }
+    Tree.print();
 
-    Node Container;
-    Container.add_sub(Sub);
-    if (A.contains(Container)) {
-        printf("A contains Sub!\n");
-    }
+    //Node Sub(AND);
+    //Sub.add_var('x');
+    //Sub.add_var('y');
+
+    //Node SubSub(OR);
+    //SubSub.add_var('w');
+    //SubSub.add_var('z');
+    //Sub.add_sub(SubSub);
+
+    //Node A(OR);
+    //A.add_var('a');
+    //A.add_var('b');
+    //A.add_sub(Sub);
+
+    //Node B(OR);
+    //B.add_var('d');
+    //B.add_var('e');
+    //B.add_sub(Sub);
+
+    //printf("A: "); A.print();
+    //printf("B: "); B.print();
+
+    //if (A.has_intersection(B)) {
+    //    printf("has intersection: ");
+    //    Node I;
+    //    I.children = A.intersect(B);
+    //    I.type = A.type;
+    //    I.print();
+    //}
+
+    //Node Container;
+    //Container.add_sub(Sub);
+    //if (A.has_subset(Container)) {
+    //    printf("A contains Sub!\n");
+    //}
+
+    //printf("A is cnf? %s\n", A.is_cnf() ? "yes" : "no");
     
     return 0;
 }
