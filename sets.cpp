@@ -3,43 +3,6 @@
 #include <set>
 #include <algorithm>
 
-//class Node {
-//public:
-//    std::set<std::string> vars;
-//
-//    Node (std::set<std::string> v)
-//        : vars(v)
-//    { }
-//
-//    std::set<std::string>
-//    intersect (Node &other)
-//    {
-//        std::set<std::string> S;
-//        set_intersection(this->vars.begin(), this->vars.end(),
-//                         other.vars.begin(), other.vars.end(),
-//                         std::inserter(S, S.begin()));
-//        return S;
-//    }
-//
-//    bool
-//    has_intersection (Node &other)
-//    {
-//        return !(this->intersect(other).empty());
-//    }
-//
-//    void
-//    print ()
-//    {
-//        printf("(");
-//        for (auto &str : vars) {
-//            printf(" %s ", str.c_str());
-//        }
-//        printf(")\n");
-//    }
-//
-//private:
-//};
-
 typedef enum NodeType {
     AND, OR, NOT, VAR, NVAR, TRUE, FALSE
 } NodeType;
@@ -50,6 +13,7 @@ public:
     char val;
     std::set<Node> children;
 
+    Node () : type(FALSE), val('\0') { }
     Node (char var, bool negated) : type(negated ? NVAR : VAR), val(var) { }
     Node (NodeType op) : type(op), val('\0') { }
     Node (int constant) : type(constant > 0 ? TRUE : FALSE), val(constant) { }
@@ -68,9 +32,25 @@ public:
             return true;
         if (this->is_operator() && !other.is_operator())
             return false;
-        /* If two compound expressions, the smaller ones go first */
-        if (this->is_operator() && other.is_operator())
+
+        /* If two compound expressions */
+        if (this->is_operator() && other.is_operator()) {
+            /* NOTs come before everything */
+            if (this->type == NOT && other.type != NOT)
+                return true;
+            if (this->type != NOT && other.type == NOT)
+                return false;
+
+            /* sort AND's first */
+            if (this->type == AND && other.type == OR)
+                return true;
+            /* then the OR's */
+            if (this->type == OR && other.type == AND)
+                return false;
+
+            /* and if they're the same, sort by size */
             return this->children.size() < other.children.size();
+        }
 
         /* past this point, 'this' and 'other' are variable Nodes */
 
@@ -168,6 +148,21 @@ public:
     {
         return !(this->intersect(other).empty());
     }
+
+    /*
+     * This has a weird interaction... since this effectively determines
+     * whether or not a Node contains other nodes, specifying whether a Node
+     * contains another single Node will *not* work with this method. One would
+     * need to add that single Node to a container node (to form a set
+     * container) to use this method correctly. Otherwise, the 'other.children'
+     * will be empty (or at least contain nodes unexpected).
+     */
+    bool
+    contains (Node &other)
+    {
+        return (std::includes(this->children.begin(), this->children.end(),
+                              other.children.begin(), other.children.end()));
+    }
 };
 
 int
@@ -177,21 +172,37 @@ main ()
     Sub.add_var('x');
     Sub.add_var('y');
 
+    Node SubSub(OR);
+    SubSub.add_var('w');
+    SubSub.add_var('z');
+    Sub.add_sub(SubSub);
+
     Node A(OR);
     A.add_var('a');
     A.add_var('b');
     A.add_sub(Sub);
-    //A.add_var('c');
 
     Node B(OR);
     B.add_var('d');
     B.add_var('e');
     B.add_sub(Sub);
-    //B.add_var('f');
 
     A.print();
     B.print();
-    printf("has intersection: %s\n", A.has_intersection(B) ? "yes" : "no");
 
+    if (A.has_intersection(B)) {
+        printf("has intersection: ");
+        Node I;
+        I.children = A.intersect(B);
+        I.type = A.type;
+        I.print();
+    }
+
+    Node Container;
+    Container.add_sub(Sub);
+    if (A.contains(Container)) {
+        printf("A contains Sub!\n");
+    }
+    
     return 0;
 }
