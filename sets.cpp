@@ -50,7 +50,18 @@ public:
                 return false;
 
             /* and if they're the same, sort by size */
-            return this->children.size() < other.children.size();
+            if (this->children.size() < other.children.size())
+                return true;
+            if (this->children.size() > other.children.size())
+                return false;
+
+            /* if they are the same size, recurse until we find a difference */
+            for (auto &A : this->children)
+                for (auto &B : other.children)
+                    if (A < B)
+                        return true;
+
+            return false;
         }
 
         /* past this point, 'this' and 'other' are variable Nodes */
@@ -209,67 +220,76 @@ public:
     }
 };
 
+Node
+convert_to_cnf (Node &A, Node &B, Node &C)
+{
+    Node CNF(AND);
+    Node L(OR);
+    Node R(OR);
+
+    L.add_sub(A);
+    L.add_sub(B);
+    R.add_sub(A);
+    R.add_sub(C);
+
+    CNF.add_sub(L);
+    CNF.add_sub(R);
+
+    return CNF;
+}
+
+Node
+to_cnf (Node &N)
+{
+    Node ret(AND);
+
+    assert(N.is_operator());
+
+    if (N.is_cnf())
+        return N;
+
+    if (N.type == AND) {
+        for (auto C : N.children)
+            ret.add_sub(to_cnf(C));
+    }
+    else {
+        for (auto C : N.children) {
+        }
+    }
+
+    return ret;
+}
+
 int
 main ()
 {
-    Node Tree(OR);
+    Node v1('c', false);
+    Node v2('a', false);
+    Node v3('b', false);
 
-    Node L(AND);
-    L.add_var('a');
-    L.add_var('b');
+    Node E = convert_to_cnf(v1, v2, v3);
+    E.print();
 
-    Node R(AND);
-    R.add_var('x');
-    R.add_var('y');
+    //Node Tree(OR);
 
-    Node RR(OR);
-    RR.add_var('w');
-    RR.add_var('z');
+    //Node L(AND);
+    //L.add_var('a');
+    //L.add_var('b');
 
-    R.add_sub(RR);
-    Tree.add_var('c');
-    Tree.add_sub(R);
-    Tree.add_sub(L);
+    //Node R(AND);
+    //R.add_var('x');
+    //R.add_var('y');
 
-    Tree.print();
+    //Node RR(OR);
+    //RR.add_var('w');
+    //RR.add_var('z');
 
-    //Node Sub(AND);
-    //Sub.add_var('x');
-    //Sub.add_var('y');
+    //R.add_sub(RR);
+    //Tree.add_var('c');
+    //Tree.add_sub(R);
+    //Tree.add_sub(L);
 
-    //Node SubSub(OR);
-    //SubSub.add_var('w');
-    //SubSub.add_var('z');
-    //Sub.add_sub(SubSub);
-
-    //Node A(OR);
-    //A.add_var('a');
-    //A.add_var('b');
-    //A.add_sub(Sub);
-
-    //Node B(OR);
-    //B.add_var('d');
-    //B.add_var('e');
-    //B.add_sub(Sub);
-
-    //printf("A: "); A.print();
-    //printf("B: "); B.print();
-
-    //if (A.has_intersection(B)) {
-    //    printf("has intersection: ");
-    //    Node I;
-    //    I.children = A.intersect(B);
-    //    I.type = A.type;
-    //    I.print();
-    //}
-
-    //Node Container;
-    //Container.add_sub(Sub);
-    //if (A.has_subset(Container)) {
-    //    printf("A contains Sub!\n");
-    //}
-
-    //printf("A is cnf? %s\n", A.is_cnf() ? "yes" : "no");
+    //Tree.print();
     
     return 0;
 }
