@@ -56,10 +56,14 @@ public:
                 return false;
 
             /* if they are the same size, recurse until we find a difference */
-            for (auto &A : this->children)
-                for (auto &B : other.children)
-                    if (A < B)
-                        return true;
+            auto it1 = this->children.begin();
+            auto it2 = other.children.begin();
+            for (; it1 != this->children.end(); it1++, it2++) {
+                if (*it1 < *it2)
+                    return true;
+                else if (*it2 < *it1)
+                    return false;
+            }
 
             return false;
         }
@@ -220,20 +224,20 @@ public:
     }
 };
 
+/*
+ * A + (B * C * ...) => (A+B)*(A+B)*(A+...)*...
+ */
 Node
-convert_to_cnf (Node &A, Node &B, Node &C)
+convert_to_cnf (Node &A, Node &B)
 {
     Node CNF(AND);
-    Node L(OR);
-    Node R(OR);
 
-    L.add_sub(A);
-    L.add_sub(B);
-    R.add_sub(A);
-    R.add_sub(C);
-
-    CNF.add_sub(L);
-    CNF.add_sub(R);
+    for (auto &C : B.children) {
+        Node child(OR);
+        child.add_sub(A);
+        child.add_sub(C);
+        CNF.add_sub(child);
+    }
 
     return CNF;
 }
@@ -248,13 +252,14 @@ to_cnf (Node &N)
     if (N.is_cnf())
         return N;
 
+    //if (N.children.size() < 2)
+    //    return N;
+
     if (N.type == AND) {
         for (auto C : N.children)
             ret.add_sub(to_cnf(C));
     }
     else {
-        for (auto C : N.children) {
-        }
     }
 
     return ret;
@@ -263,11 +268,12 @@ to_cnf (Node &N)
 int
 main ()
 {
-    Node v1('c', false);
-    Node v2('a', false);
-    Node v3('b', false);
+    Node c1('z', false);
+    Node c2(AND);
+    c2.add_var('a');
+    c2.add_var('b');
 
-    Node E = convert_to_cnf(v1, v2, v3);
+    Node E = convert_to_cnf(c1, c2);
     E.print();
 
     //Node Tree(OR);
